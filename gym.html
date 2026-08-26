@@ -3641,6 +3641,9 @@ img, video, canvas, svg { max-width: 100%; }
         return list;
       });
     }
+    function tokenize(s) {
+      return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+    }
     function matchExact(name) {
       if (!templates) return null;
       const n = norm(name); if (!n) return null;
@@ -3648,17 +3651,23 @@ img, video, canvas, svg { max-width: 100%; }
       if (!hits.length) return null;
       return (hits.find((t) => !t.is_custom) || hits[0]).id;
     }
-    function suggestTemplate(name) {
+    // Best-effort suggestion: exact name first, else the template whose
+    // title contains every word of the exercise name (fewest extra words
+    // wins, built-in beats custom).
+    function bestGuess(name) {
       const ex = matchExact(name);
       if (ex) return ex;
       if (!templates) return null;
-      const n = norm(name); if (!n) return null;
-      const hits = templates.filter((t) => {
-        const tn = norm(t.title);
-        return tn && (tn.indexOf(n) === 0 || n.indexOf(tn) === 0);
+      const want = tokenize(name);
+      if (!want.length) return null;
+      let best = null, bestScore = Infinity;
+      templates.forEach((t) => {
+        const have = tokenize(t.title);
+        if (!want.every((w) => have.indexOf(w) !== -1)) return;
+        const score = (have.length - want.length) + (t.is_custom ? 0.5 : 0);
+        if (score < bestScore) { bestScore = score; best = t; }
       });
-      if (!hits.length) return null;
-      return (hits.find((t) => !t.is_custom) || hits[0]).id;
+      return best ? best.id : null;
     }
     function titleOf(id) {
       const t = templates && templates.find((x) => x.id === id);
@@ -3716,18 +3725,13 @@ img, video, canvas, svg { max-width: 100%; }
           done('Couldn’t reach Hevy — set HEVY_API_KEY in Vercel, then redeploy.');
           return;
         }
-        let autoLinked = 0;
-        const unlinked = [];
         state.exercises.forEach((ex) => {
-          if (!ex.hevyId) {
-            const m = matchExact(ex.name);
-            if (m) { ex.hevyId = m; autoLinked++; }
-          }
-          if (!ex.hevyId) unlinked.push(ex.name);
+          if (!ex.hevyId) { const m = matchExact(ex.name); if (m) ex.hevyId = m; }
         });
         const targets = state.exercises.filter((ex) => ex.hevyId);
+        const unlinked = state.exercises.filter((ex) => !ex.hevyId).map((ex) => ex.name);
         if (!targets.length) {
-          done('No exercises linked to Hevy yet — open one → Edit → pick its Hevy exercise.');
+          done('Nothing linked yet — tap “Link” to map your exercises to Hevy.');
           return;
         }
         const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
@@ -3745,11 +3749,9 @@ img, video, canvas, svg { max-width: 100%; }
         )).then(() => {
           saveState();
           renderAll();
-          let msg = 'Synced ' + targets.length + ' exercise' + (targets.length === 1 ? '' : 's')
-            + ' · ' + imported + ' sessions from Hevy';
-          if (autoLinked) msg += ' · auto-linked ' + autoLinked;
+          let msg = 'Synced ' + targets.length + ' · ' + imported + ' sessions from Hevy';
           if (failed) msg += ' · ' + failed + ' failed';
-          if (unlinked.length) msg += ' · unlinked: ' + unlinked.join(', ');
+          if (unlinked.length) msg += ' · still unlinked: ' + unlinked.join(', ');
           done(msg);
         });
       }).catch((e) => done('Hevy sync failed: ' + (e && e.message || e)));
@@ -3769,16 +3771,78 @@ img, video, canvas, svg { max-width: 100%; }
       t._to = setTimeout(() => { t.style.opacity = '0'; }, 6000);
     }
 
-    // "Sync Hevy" button in the coach header
+    // Bulk "Link exercises to Hevy" modal — one dropdown per coach lift,
+    // pre-filled with a best guess. Save writes ex.hevyId and syncs.
+    function openMapModal() {
+      loadTemplates().then((list) => {
+        if (!list || !list.length) {
+          toast('Couldn’t reach Hevy — set HEVY_API_KEY in Vercel, then redeploy.');
+          return;
+        }
+        const opts = '<option value="">— not linked —</option>' + list.map((t) =>
+          '<option value="' + t.id + '">' + t.title.replace(/</g, '&lt;') + (t.is_custom ? ' (custom)' : '') + '</option>'
+        ).join('');
+        const old = document.getElementById('hevyMapBg');
+        if (old) old.remove();
+        const bg = document.createElement('div');
+        bg.id = 'hevyMapBg';
+        bg.style.cssText = 'position:fixed;inset:0;z-index:210;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;padding:16px;';
+        const rows = state.exercises.map((ex) => {
+          const suggested = !ex.hevyId && bestGuess(ex.name);
+          return '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:11px">'
+            + '<label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.03em">'
+            + ex.name.replace(/</g, '&lt;')
+            + (suggested ? ' <span style="color:#6ee7b7;font-weight:600">· suggested</span>' : '')
+            + '</label>'
+            + '<select data-ex="' + ex.id + '" class="po-ex-select" style="width:100%">' + opts + '</select>'
+            + '</div>';
+        }).join('');
+        bg.innerHTML = '<div style="background:#111113;border:1px solid var(--border-strong);border-radius:18px;padding:18px;max-width:520px;width:100%;max-height:82vh;overflow:auto">'
+          + '<h3 style="margin:0 0 4px;font-size:16px;color:var(--text-1)">Link exercises to Hevy</h3>'
+          + '<p style="margin:0 0 14px;font-size:12px;color:var(--text-3);line-height:1.45">Pick the Hevy exercise each coach lift should pull its history from. Suggestions are pre-selected — glance through them before saving.</p>'
+          + rows
+          + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'
+          + '<button id="hevyMapCancel" class="po-btn-secondary" type="button">Cancel</button>'
+          + '<button id="hevyMapSave" class="po-btn-primary" type="button">Save &amp; sync</button>'
+          + '</div></div>';
+        document.body.appendChild(bg);
+        bg.querySelectorAll('select[data-ex]').forEach((s) => {
+          const ex = state.exercises.find((e) => e.id === s.getAttribute('data-ex'));
+          s.value = (ex && ex.hevyId) || (ex && bestGuess(ex.name)) || '';
+        });
+        bg.addEventListener('click', (e) => { if (e.target === bg) bg.remove(); });
+        document.getElementById('hevyMapCancel').addEventListener('click', () => bg.remove());
+        document.getElementById('hevyMapSave').addEventListener('click', () => {
+          bg.querySelectorAll('select[data-ex]').forEach((s) => {
+            const ex = state.exercises.find((e) => e.id === s.getAttribute('data-ex'));
+            if (!ex) return;
+            if (s.value) ex.hevyId = s.value; else delete ex.hevyId;
+          });
+          saveState();
+          bg.remove();
+          syncAll(document.getElementById('hevySyncBtn'));
+        });
+      });
+    }
+
+    // Coach-header buttons: [Link] [Sync Hevy]
     const hdr = document.querySelector('.po-header');
     if (hdr) {
+      hdr.style.gap = '8px';
+      const gear = document.getElementById('settingsBtn');
+      const linkBtn = document.createElement('button');
+      linkBtn.id = 'hevyLinkBtn';
+      linkBtn.type = 'button';
+      linkBtn.textContent = 'Link';
+      linkBtn.style.cssText = 'margin-left:auto;background:transparent;border:1px solid var(--border-strong);color:var(--text-2);font:700 11px/1 var(--font);letter-spacing:0.04em;padding:9px 12px;border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent;';
       const sb = document.createElement('button');
       sb.id = 'hevySyncBtn';
       sb.type = 'button';
       sb.textContent = 'Sync Hevy';
-      sb.style.cssText = 'margin-left:auto;background:rgba(110,231,183,0.12);border:1px solid rgba(110,231,183,0.30);color:#6ee7b7;font:700 11px/1 var(--font);letter-spacing:0.04em;padding:9px 13px;border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent;';
-      const gear = document.getElementById('settingsBtn');
+      sb.style.cssText = 'background:rgba(110,231,183,0.12);border:1px solid rgba(110,231,183,0.30);color:#6ee7b7;font:700 11px/1 var(--font);letter-spacing:0.04em;padding:9px 13px;border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+      hdr.insertBefore(linkBtn, gear || null);
       hdr.insertBefore(sb, gear || null);
+      linkBtn.addEventListener('click', openMapModal);
       sb.addEventListener('click', () => syncAll(sb));
     }
 
@@ -3798,7 +3862,7 @@ img, video, canvas, svg { max-width: 100%; }
     function updateHint() {
       if (!hint) return;
       if (sel && sel.value) { hint.textContent = 'Sessions import from ' + (titleOf(sel.value) || 'this Hevy exercise') + '.'; return; }
-      const g = suggestTemplate((document.getElementById('exName').value || '').trim());
+      const g = bestGuess((document.getElementById('exName').value || '').trim());
       hint.textContent = g ? ('Suggested: ' + titleOf(g) + ' — pick it, or leave unlinked to log by hand.')
                            : 'Optional. Leave unlinked to log this exercise by hand.';
     }
