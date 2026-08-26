@@ -8,6 +8,8 @@
 // Optional: HEVY_API_KEY (same one the gym page already uses) for richer
 // "how did my last session go" context.
 
+import { PROGRAM } from './_program.js';
+
 const MODEL = 'claude-sonnet-5';
 
 export default async function handler(req, res) {
@@ -51,17 +53,21 @@ export default async function handler(req, res) {
   }
 
   const unitWord = context.units === 'lb' ? 'pounds (lb)' : 'kilograms (kg)';
-  const system = [
-    "You are a strength & hypertrophy coach embedded in the user's training dashboard.",
-    "You can see their program (exercises, target rep ranges, weight increments), their recent logged sessions, the app's computed next-session prescription per exercise, and their last few full Hevy workouts including RPE and their own written notes.",
-    "Be concise and specific. Cite actual numbers from the data. Give a few sharp points, not generic filler.",
+
+  // Stable block — persona + the athlete's periodised master plan. Cached so
+  // the plan isn't re-billed on every chat turn.
+  const persona = [
+    "You are the strength & conditioning coach for the athlete whose periodised MASTER PLAN follows.",
+    "They are peaking for the World Aquatics Masters Championships 50m backstroke (Budapest, late June 2027). Give advice, session feedback, and program tweaks IN THE CONTEXT OF THAT PLAN: the current block and its intensities, the taper, the swimming-specific priorities (start power, the 15m underwater, dolphin-kick drivers) and the injury constraints (patellar tendinopathy, ankle mobility).",
+    "The dashboard's per-exercise `computedNext` is a simple weekly autoregulation helper. When it and the master plan's block prescription disagree, the master plan wins — say so.",
+    "Be concise and specific. Cite actual numbers from the data. A few sharp points, not generic filler.",
     "All weights are in " + unitWord + " — always answer in that unit.",
     "",
-    "When (and only when) the user wants the program changed, or a change is clearly warranted by the data, append EXACTLY ONE fenced block as the last thing in your message:",
+    "When (and only when) the user wants the dashboard's exercise tracker changed, or a change is clearly warranted, append EXACTLY ONE fenced block as the last thing in your message:",
     "```coach-proposal",
     '{ "summary": "<one short line>", "changes": [ <change objects> ] }',
     "```",
-    "Change objects (use exact exercise names from the program):",
+    "Change objects (use exact exercise names from APP STATE):",
     '  {"op":"set_target","exercise":"<name>","weight":<number>,"reps":<int>,"note":"<short why>"}',
     '  {"op":"set_reps","exercise":"<name>","repMin":<int>,"repMax":<int>}',
     '  {"op":"set_step","exercise":"<name>","step":<number>}',
@@ -70,16 +76,25 @@ export default async function handler(req, res) {
     '  {"op":"remove_exercise","exercise":"<name>"}',
     "The user reviews and confirms every proposal before it takes effect — never say a change is done. For pure advice or session feedback, omit the block entirely.",
     "",
-    "PROGRAM + RECENT DATA (JSON):",
+    "=== MASTER PLAN ===",
+    PROGRAM,
+  ].join("\n");
+
+  // Volatile block — this request's dashboard state and recent Hevy detail.
+  const perRequest = [
+    "APP STATE — the dashboard's exercise tracker (JSON):",
     safeJson(context),
     hevyRecent && hevyRecent.length ? ("LAST HEVY WORKOUTS (JSON):\n" + safeJson(hevyRecent)) : "",
   ].join("\n");
 
   const anthReq = {
     model: MODEL,
-    max_tokens: 1400,
-    system,
-    output_config: { effort: 'low' },
+    max_tokens: 1800,
+    system: [
+      { type: 'text', text: persona, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: perRequest },
+    ],
+    output_config: { effort: 'medium' },
     messages: msgs.map((m) => ({
       role: m && m.role === 'assistant' ? 'assistant' : 'user',
       content: String((m && m.content) || ''),
@@ -121,7 +136,12 @@ export default async function handler(req, res) {
       raw,
       proposal,
       usage: data.usage
-        ? { input_tokens: data.usage.input_tokens, output_tokens: data.usage.output_tokens }
+        ? {
+            input_tokens: data.usage.input_tokens,
+            output_tokens: data.usage.output_tokens,
+            cache_read_input_tokens: data.usage.cache_read_input_tokens || 0,
+            cache_creation_input_tokens: data.usage.cache_creation_input_tokens || 0,
+          }
         : null,
     });
   } catch (e) {
