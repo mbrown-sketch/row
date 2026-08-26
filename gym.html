@@ -1274,6 +1274,71 @@ img, video, canvas, svg { max-width: 100%; }
     <span class="po-day-split" id="dayPillSplit">—</span>
   </button>
 
+  <!-- NEXT SESSION PLAN + COACH CHAT -->
+  <style>
+    .ns-card, .coach-card { display: flex; flex-direction: column; gap: 13px; }
+    .ns-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .ns-split { font-size: 16px; font-weight: 700; color: var(--text-1); letter-spacing: -0.01em; }
+    .ns-date { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); margin-top: 3px; }
+    .ns-meta { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); text-align: right; line-height: 1.5; white-space: nowrap; }
+    .ns-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .ns-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding: 11px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 11px; }
+    .ns-row-name { font-size: 13px; color: var(--text-1); font-weight: 600; min-width: 0; }
+    .ns-row-target { font-size: 13px; color: var(--text-1); font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+    .ns-row-why { grid-column: 1 / -1; font-size: 11px; color: var(--text-3); line-height: 1.4; }
+    .ns-tag { display: inline-block; font-size: 8.5px; font-weight: 800; letter-spacing: 0.08em; padding: 2px 5px; border-radius: 5px; margin-left: 6px; vertical-align: 1px; }
+    .ns-tag.up { background: rgba(110,231,183,0.16); color: #6ee7b7; }
+    .ns-tag.hold { background: rgba(255,255,255,0.08); color: var(--text-2); }
+    .ns-tag.down { background: rgba(251,191,36,0.16); color: #fbbf24; }
+    .ns-tag.coach { background: rgba(125,211,252,0.16); color: #7dd3fc; }
+    .ns-clear { background: none; border: 0; color: var(--text-4); font-size: 13px; cursor: pointer; padding: 0 0 0 6px; }
+    .ns-empty { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+    .coach-log { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
+    .coach-msg { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+    .coach-msg-user { align-self: flex-end; background: rgba(125,211,252,0.12); border: 1px solid rgba(125,211,252,0.22); color: var(--text-1); max-width: 85%; }
+    .coach-msg-bot { align-self: flex-start; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-2); max-width: 92%; }
+    .coach-msg-bot.thinking { color: var(--text-4); font-style: italic; }
+    .coach-input { display: flex; gap: 8px; align-items: flex-end; }
+    .coach-input textarea { flex: 1; resize: none; padding: 11px 12px; border: 1px solid var(--border); background: rgba(0,0,0,0.28); color: var(--text-1); border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 400; text-align: left; outline: none; max-height: 120px; line-height: 1.4; }
+    .coach-input textarea:focus { border-color: rgba(255,255,255,0.40); }
+    .coach-input .po-btn-primary { flex: 0 0 auto; }
+    .coach-hint { font-size: 11px; color: var(--text-4); font-family: var(--font-mono); min-height: 13px; }
+    .coach-proposal { border: 1px solid rgba(125,211,252,0.30); background: rgba(125,211,252,0.06); border-radius: 12px; padding: 12px; }
+    .coach-proposal h4 { margin: 0 0 5px; font-size: 11px; color: #7dd3fc; letter-spacing: 0.06em; text-transform: uppercase; }
+    .coach-proposal-sum { font-size: 12.5px; color: var(--text-1); margin-bottom: 9px; line-height: 1.4; }
+    .coach-proposal ul { list-style: none; margin: 0 0 11px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .coach-proposal li { font-size: 12px; color: var(--text-2); font-family: var(--font-mono); line-height: 1.4; }
+    .coach-proposal-actions { display: flex; gap: 8px; }
+  </style>
+  <div class="wt-section" id="nextSessionSection">
+    <div class="wt-divider"><span>NEXT SESSION</span></div>
+    <div class="wt-card ns-card">
+      <div class="ns-head">
+        <div>
+          <div class="ns-split" id="nsSplit">—</div>
+          <div class="ns-date" id="nsDate">—</div>
+        </div>
+        <div class="ns-meta" id="nsMeta"></div>
+      </div>
+      <ul class="ns-list" id="nsList"></ul>
+      <div class="ns-empty" id="nsEmpty" style="display:none">No plan yet — pick a training day above, then log or sync a session.</div>
+    </div>
+  </div>
+  <div class="wt-section" id="coachSection">
+    <div class="wt-divider"><span>COACH</span></div>
+    <div class="wt-card coach-card">
+      <div class="coach-log" id="coachLog">
+        <div class="coach-msg coach-msg-bot">I can see your program, recent sessions, and your last few Hevy workouts. Ask for feedback on your last session, or tell me how training feels and I'll suggest tweaks to the plan.</div>
+      </div>
+      <div id="coachProposal" class="coach-proposal" style="display:none"></div>
+      <form class="coach-input" id="coachForm">
+        <textarea id="coachText" rows="1" placeholder="Ask your coach…" autocomplete="off"></textarea>
+        <button type="submit" id="coachSend" class="po-btn-primary">Send</button>
+      </form>
+      <div class="coach-hint" id="coachHint"></div>
+    </div>
+  </div>
+
   <!-- HEVY STRENGTH (Phase 1: read-only via /api/hevy) -->
   <style>
     .hv-card { display: flex; flex-direction: column; gap: 14px; }
@@ -3895,6 +3960,302 @@ img, video, canvas, svg { max-width: 100%; }
         }
       });
     }
+  })();
+
+  // ============================================================
+  // NEXT SESSION PLAN + COACH CHAT
+  //   • Next Session: rolls getRx() (or a coach override) up into
+  //     the whole plan for the next non-rest training day.
+  //   • Coach: chat backed by /api/coach (Claude). Proposals from
+  //     the coach are shown as a review-before-apply diff.
+  // ============================================================
+  (function () {
+    const dayIdByName = (name) => {
+      const d = state.days.find((x) => x.name.toLowerCase() === String(name || '').toLowerCase());
+      return d ? d.id : null;
+    };
+    function upcomingTrainingDay() {
+      const rot = state.splitRotation || [];
+      if (!rot.length) return null;
+      let t = { name: rot[0], index: 0 };
+      try { t = todaySplit(); } catch (e) {}
+      for (let i = 0; i < rot.length; i++) {
+        const idx = (t.index + i) % rot.length;
+        if (!isRestName(rot[idx])) {
+          const date = new Date();
+          date.setDate(date.getDate() + i);
+          return { name: rot[idx], offset: i, date };
+        }
+      }
+      return null;
+    }
+    function planExercises(dayName) {
+      const dayId = dayIdByName(dayName);
+      return state.exercises.filter((e) =>
+        (dayId ? e.day === dayId : false) &&
+        (e.gym === state.filterGym || e.gym === 'both'));
+    }
+    function targetFor(ex) {
+      if (ex.rxOverride && (ex.rxOverride.weight != null || ex.rxOverride.reps != null)) {
+        return {
+          type: 'coach',
+          weight: ex.rxOverride.weight || 0,
+          reps: ex.rxOverride.reps || ex.repMin,
+          why: ex.rxOverride.note || 'Set by coach.',
+        };
+      }
+      const logs = (state.logs[ex.id] || []).slice();
+      let rx = null;
+      try { rx = getRx(ex, logs); } catch (e) {}
+      if (rx) return { type: rx.type, weight: rx.weight, reps: rx.reps, why: rx.reason };
+      return {
+        type: 'hold',
+        weight: ex.startWeight || 0,
+        reps: ex.repMin,
+        why: 'First session — set a baseline you can own for all working sets.',
+      };
+    }
+    function fmtTarget(ex, t) {
+      if (ex.bw) return (t.reps || ex.repMin) + ' reps';
+      return (t.weight || 0) + unit() + ' × ' + (t.reps || ex.repMin);
+    }
+    const TAG_LABEL = { up: 'ADD', hold: 'HOLD', down: 'DELOAD', coach: 'COACH' };
+
+    function renderNextSession() {
+      const listEl = document.getElementById('nsList');
+      const emptyEl = document.getElementById('nsEmpty');
+      const splitEl = document.getElementById('nsSplit');
+      const dateEl = document.getElementById('nsDate');
+      const metaEl = document.getElementById('nsMeta');
+      if (!listEl) return;
+
+      const up = upcomingTrainingDay();
+      if (!up) {
+        splitEl.textContent = '—'; dateEl.textContent = ''; metaEl.textContent = '';
+        listEl.innerHTML = ''; emptyEl.style.display = '';
+        return;
+      }
+      const when = up.offset === 0 ? 'today' : up.offset === 1 ? 'tomorrow'
+        : up.date.toLocaleDateString(undefined, { weekday: 'long' });
+      splitEl.textContent = up.name;
+      dateEl.textContent = when + ' · ' + up.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+      const exs = planExercises(up.name);
+      if (!exs.length) {
+        metaEl.textContent = '';
+        listEl.innerHTML = '';
+        emptyEl.style.display = '';
+        emptyEl.textContent = 'No exercises for ' + up.name + ' at this gym. Add some, or switch the Gym filter.';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      let ups = 0;
+      listEl.innerHTML = exs.map((ex) => {
+        const t = targetFor(ex);
+        if (t.type === 'up') ups++;
+        const tag = TAG_LABEL[t.type] || 'HOLD';
+        return '<li class="ns-row">'
+          + '<span class="ns-row-name">' + escapeHtml(ex.name)
+          + '<span class="ns-tag ' + t.type + '">' + tag + '</span>'
+          + (t.type === 'coach' ? '<button class="ns-clear" data-ex="' + ex.id + '" title="Clear coach override">✕</button>' : '')
+          + '</span>'
+          + '<span class="ns-row-target">' + escapeHtml(fmtTarget(ex, t)) + '</span>'
+          + '<span class="ns-row-why">' + escapeHtml(t.why || '') + '</span>'
+          + '</li>';
+      }).join('');
+      metaEl.textContent = exs.length + ' lift' + (exs.length === 1 ? '' : 's')
+        + (ups ? ' · ' + ups + ' progressing' : '');
+
+      listEl.querySelectorAll('.ns-clear').forEach((b) => {
+        b.addEventListener('click', () => {
+          const ex = state.exercises.find((e) => e.id === b.getAttribute('data-ex'));
+          if (ex) { delete ex.rxOverride; saveState(); renderAll(); }
+        });
+      });
+    }
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    }
+
+    // keep Next Session in sync with every coach re-render
+    if (typeof renderAll === 'function') {
+      const _renderAll = renderAll;
+      renderAll = function () { _renderAll.apply(this, arguments); try { renderNextSession(); } catch (e) {} };
+    }
+    renderNextSession();
+
+    // ---------- Coach chat ----------
+    const logEl = document.getElementById('coachLog');
+    const formEl = document.getElementById('coachForm');
+    const textEl = document.getElementById('coachText');
+    const sendEl = document.getElementById('coachSend');
+    const hintEl = document.getElementById('coachHint');
+    const propEl = document.getElementById('coachProposal');
+    if (!logEl || !formEl) return;
+
+    const history = []; // {role, content} — session only
+    let busy = false;
+
+    function bubble(text, who, extraClass) {
+      const d = document.createElement('div');
+      d.className = 'coach-msg coach-msg-' + who + (extraClass ? ' ' + extraClass : '');
+      d.textContent = text;
+      logEl.appendChild(d);
+      logEl.scrollTop = logEl.scrollHeight;
+      return d;
+    }
+    function setHint(s) { hintEl.textContent = s || ''; }
+
+    function snapshot() {
+      const dayName = {};
+      state.days.forEach((d) => { dayName[d.id] = d.name; });
+      let today = null;
+      try { today = todaySplit().name; } catch (e) {}
+      return {
+        units: state.units,
+        todaySplit: today,
+        splitRotation: state.splitRotation,
+        exercises: state.exercises.map((ex) => {
+          let rx = null;
+          try { rx = getRx(ex, (state.logs[ex.id] || []).slice()); } catch (e) {}
+          return {
+            name: ex.name,
+            day: dayName[ex.day] || ex.day,
+            gym: ex.gym,
+            repRange: [ex.repMin, ex.repMax],
+            step: ex.step,
+            bodyweight: !!ex.bw,
+            coachOverride: ex.rxOverride || null,
+            computedNext: rx ? { move: rx.type, weight: rx.weight, reps: rx.reps, why: rx.reason } : null,
+            recentSessions: (state.logs[ex.id] || []).slice(-8).map((l) => ({
+              date: String(l.date || '').slice(0, 10),
+              weight: l.weight, reps: l.reps, from: l.src || 'manual',
+            })),
+          };
+        }),
+      };
+    }
+
+    function describeChange(c) {
+      const w = (v) => v + unit();
+      if (c.op === 'set_target') return c.exercise + ' → ' + (c.weight != null ? w(c.weight) + ' × ' : '') + (c.reps != null ? c.reps : '') + (c.note ? '  (' + c.note + ')' : '');
+      if (c.op === 'set_reps') return c.exercise + ' → rep range ' + c.repMin + '–' + c.repMax;
+      if (c.op === 'set_step') return c.exercise + ' → increment ' + c.step + unit();
+      if (c.op === 'add_exercise') return 'add ' + c.name + ' to ' + (c.day || '?') + ' (' + (c.repMin || 8) + '–' + (c.repMax || 12) + ')';
+      if (c.op === 'rename_exercise') return c.exercise + ' → rename to “' + c.name + '”';
+      if (c.op === 'remove_exercise') return 'remove ' + c.exercise;
+      return JSON.stringify(c);
+    }
+    function applyProposal(p) {
+      const dayId = {};
+      state.days.forEach((d) => { dayId[d.name.toLowerCase()] = d.id; });
+      const find = (name) => state.exercises.find((e) => e.name.toLowerCase() === String(name || '').toLowerCase());
+      let n = 0;
+      (p.changes || []).forEach((c) => {
+        const ex = c.exercise ? find(c.exercise) : null;
+        if (c.op === 'set_target' && ex) {
+          ex.rxOverride = {
+            weight: c.weight != null ? parseFloat(c.weight) : null,
+            reps: c.reps != null ? parseInt(c.reps, 10) : null,
+            note: (c.note || 'Set by coach.').slice(0, 120),
+          };
+          n++;
+        } else if (c.op === 'set_reps' && ex) {
+          if (c.repMin != null) ex.repMin = parseInt(c.repMin, 10) || ex.repMin;
+          if (c.repMax != null) ex.repMax = parseInt(c.repMax, 10) || ex.repMax;
+          n++;
+        } else if (c.op === 'set_step' && ex) {
+          const s = parseFloat(c.step); if (s > 0) { ex.step = s; n++; }
+        } else if (c.op === 'rename_exercise' && ex && c.name) {
+          ex.name = String(c.name).slice(0, 60); n++;
+        } else if (c.op === 'remove_exercise' && ex) {
+          state.exercises = state.exercises.filter((e) => e.id !== ex.id);
+          delete state.logs[ex.id];
+          n++;
+        } else if (c.op === 'add_exercise' && c.name) {
+          state.exercises.push({
+            id: uid(),
+            name: String(c.name).slice(0, 60),
+            gym: c.gym || state.filterGym,
+            day: dayId[String(c.day || '').toLowerCase()] || state.filterDay,
+            bw: !!c.bodyweight,
+            startWeight: c.bodyweight ? 0 : (parseFloat(c.startWeight) || 20),
+            repMin: parseInt(c.repMin, 10) || 8,
+            repMax: parseInt(c.repMax, 10) || 12,
+            step: c.bodyweight ? 1 : (parseFloat(c.step) || 2.5),
+          });
+          n++;
+        }
+      });
+      if (n) { saveState(); renderAll(); }
+      return n;
+    }
+    function showProposal(p) {
+      propEl.style.display = '';
+      propEl.innerHTML = '<h4>Coach suggests</h4>'
+        + '<div class="coach-proposal-sum">' + escapeHtml(p.summary || 'Program changes') + '</div>'
+        + '<ul>' + (p.changes || []).map((c) => '<li>• ' + escapeHtml(describeChange(c)) + '</li>').join('') + '</ul>'
+        + '<div class="coach-proposal-actions">'
+        + '<button class="po-btn-primary" id="coachApply" type="button">Apply</button>'
+        + '<button class="po-btn-secondary" id="coachDismiss" type="button">Dismiss</button>'
+        + '</div>';
+      document.getElementById('coachApply').addEventListener('click', () => {
+        const n = applyProposal(p);
+        propEl.style.display = 'none';
+        bubble(n ? ('Applied ' + n + ' change' + (n === 1 ? '' : 's') + '. Check Next Session.') : 'Nothing matched — no changes made.', 'bot');
+      });
+      document.getElementById('coachDismiss').addEventListener('click', () => { propEl.style.display = 'none'; });
+    }
+
+    async function send(msg) {
+      if (busy || !msg.trim()) return;
+      busy = true; sendEl.disabled = true;
+      propEl.style.display = 'none';
+      bubble(msg, 'user');
+      history.push({ role: 'user', content: msg });
+      const thinking = bubble('thinking…', 'bot', 'thinking');
+      setHint('Coach is thinking…');
+      try {
+        const r = await fetch('/api/coach', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history.slice(-16), context: snapshot() }),
+        });
+        const j = await r.json().catch(() => ({}));
+        thinking.remove();
+        if (!r.ok || j.error) {
+          bubble('⚠︎ ' + (j.error || ('HTTP ' + r.status)), 'bot');
+          setHint(/ANTHROPIC_API_KEY/.test(j.error || '') ? 'Add ANTHROPIC_API_KEY in Vercel, then redeploy.' : '');
+          return;
+        }
+        history.push({ role: 'assistant', content: j.raw || j.reply || '' });
+        bubble(j.reply || '(no reply)', 'bot');
+        if (j.proposal && j.proposal.changes && j.proposal.changes.length) showProposal(j.proposal);
+        setHint(j.usage ? ('~' + ((j.usage.input_tokens || 0) + (j.usage.output_tokens || 0)) + ' tokens this turn') : '');
+      } catch (e) {
+        thinking.remove();
+        bubble('⚠︎ ' + (e.message || e), 'bot');
+        setHint('');
+      } finally {
+        busy = false; sendEl.disabled = false;
+      }
+    }
+
+    formEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = textEl.value;
+      textEl.value = '';
+      textEl.style.height = 'auto';
+      send(v);
+    });
+    textEl.addEventListener('input', () => {
+      textEl.style.height = 'auto';
+      textEl.style.height = Math.min(textEl.scrollHeight, 120) + 'px';
+    });
+    textEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); formEl.requestSubmit(); }
+    });
   })();
 })();
 </script>
