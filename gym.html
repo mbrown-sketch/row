@@ -1274,6 +1274,80 @@ img, video, canvas, svg { max-width: 100%; }
     <span class="po-day-split" id="dayPillSplit">—</span>
   </button>
 
+  <!-- HEVY STRENGTH (Phase 1: read-only via /api/hevy) -->
+  <style>
+    .hv-card { display: flex; flex-direction: column; gap: 14px; }
+    .hv-head { display: flex; align-items: center; justify-content: space-between; }
+    .hv-brand { display: inline-flex; align-items: center; gap: 8px; }
+    .hv-brand-mark {
+      width: 20px; height: 20px; border-radius: 6px;
+      background: #6ee7b7; color: #0a0a0b;
+      font-weight: 800; font-size: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .hv-brand-text { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; color: var(--text-1); }
+    .hv-refresh {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: transparent; border: 1px solid var(--border-strong);
+      color: var(--text-3); font-size: 14px; cursor: pointer;
+      transition: color .15s, border-color .15s, transform .4s;
+    }
+    .hv-refresh:hover { color: var(--text-1); border-color: rgba(255,255,255,0.3); }
+    .hv-refresh.spin { transform: rotate(360deg); }
+    .hv-state { font-size: 12.5px; color: var(--text-3); font-family: var(--font-mono); padding: 6px 0; }
+    .hv-state.err { color: var(--bad); }
+    .hv-week { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .hv-cell {
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 10px; text-align: center;
+    }
+    .hv-cell-num {
+      font-size: 20px; font-weight: 700; color: var(--text-1);
+      font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1;
+    }
+    .hv-cell-lbl {
+      margin-top: 5px; font-size: 9.5px; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3);
+    }
+    .hv-last-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .hv-last-title { font-size: 14px; font-weight: 600; color: var(--text-1); }
+    .hv-last-date { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); white-space: nowrap; }
+    .hv-ex-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .hv-ex {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+      padding: 8px 10px; background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border); border-radius: 10px;
+    }
+    .hv-ex-name { font-size: 12.5px; color: var(--text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hv-ex-best { font-size: 12px; color: var(--text-1); font-family: var(--font-mono); white-space: nowrap; }
+    .hv-foot { font-size: 11px; color: var(--text-4); font-family: var(--font-mono); text-align: center; }
+  </style>
+  <div class="wt-section">
+    <div class="wt-divider"><span>STRENGTH</span></div>
+    <div class="wt-card hv-card">
+      <div class="hv-head">
+        <div class="hv-brand"><span class="hv-brand-mark">H</span><span class="hv-brand-text">HEVY</span></div>
+        <button id="hvRefresh" class="hv-refresh" type="button" aria-label="Refresh">&#8635;</button>
+      </div>
+      <div id="hvState" class="hv-state">Loading&hellip;</div>
+      <div id="hvBody" class="hv-body" style="display:none">
+        <div class="hv-week">
+          <div class="hv-cell"><div class="hv-cell-num" id="hvWkWorkouts">&mdash;</div><div class="hv-cell-lbl">Workouts</div></div>
+          <div class="hv-cell"><div class="hv-cell-num" id="hvWkVolume">&mdash;</div><div class="hv-cell-lbl">kg lifted</div></div>
+          <div class="hv-cell"><div class="hv-cell-num" id="hvWkSets">&mdash;</div><div class="hv-cell-lbl">Sets</div></div>
+        </div>
+        <div class="hv-last">
+          <div class="hv-last-head">
+            <span class="hv-last-title" id="hvLastTitle">&mdash;</span>
+            <span class="hv-last-date" id="hvLastDate">&mdash;</span>
+          </div>
+          <ul class="hv-ex-list" id="hvExList"></ul>
+        </div>
+        <div class="hv-foot" id="hvFoot">&mdash;</div>
+      </div>
+    </div>
+  </div>
+
   <!-- WEIGHT + PROGRESS PHOTOS -->
   <div class="wt-section">
     <div class="wt-divider"><span>WEIGHT</span></div>
@@ -3508,6 +3582,157 @@ img, video, canvas, svg { max-width: 100%; }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pcFlushPushOnUnload();
   });
+})();
+</script>
+
+<!-- HEVY STRENGTH — fetch + render (read-only, via /api/hevy proxy) -->
+<script>
+(function () {
+  'use strict';
+  var stateEl   = document.getElementById('hvState');
+  var bodyEl    = document.getElementById('hvBody');
+  var refreshBtn = document.getElementById('hvRefresh');
+  if (!stateEl || !bodyEl) return;
+
+  function api(path, extra) {
+    var qs = 'path=' + encodeURIComponent(path);
+    if (extra) qs += '&' + extra;
+    return fetch('/api/hevy?' + qs, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        return r.text().then(function (t) {
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) {}
+          return { ok: r.ok, status: r.status, json: j };
+        });
+      });
+  }
+
+  function fmtNum(n) {
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(Math.round(n));
+  }
+  function relDate(iso) {
+    var d = new Date(iso);
+    var days = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return days + 'd ago';
+    var mons = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return mons[d.getMonth()] + ' ' + d.getDate();
+  }
+  function workingSets(ex) {
+    return (ex.sets || []).filter(function (s) { return s && s.type !== 'warmup'; });
+  }
+  function bestSet(ex) {
+    var best = null;
+    workingSets(ex).forEach(function (s) {
+      if (s.weight_kg == null && s.reps == null) return;
+      if (!best) { best = s; return; }
+      var bw = best.weight_kg || 0, sw = s.weight_kg || 0;
+      if (sw > bw || (sw === bw && (s.reps || 0) > (best.reps || 0))) best = s;
+    });
+    return best;
+  }
+  function setLabel(s) {
+    if (!s) return '—';
+    if (s.weight_kg != null && s.reps != null) return s.weight_kg + ' × ' + s.reps;
+    if (s.reps != null) return s.reps + ' reps';
+    if (s.duration_seconds != null) return Math.round(s.duration_seconds / 60) + ' min';
+    if (s.distance_meters != null) return (s.distance_meters / 1000).toFixed(2) + ' km';
+    return '—';
+  }
+  function setState(msg, isErr) {
+    stateEl.textContent = msg;
+    stateEl.className = 'hv-state' + (isErr ? ' err' : '');
+    stateEl.style.display = '';
+    bodyEl.style.display = 'none';
+  }
+
+  function render(workouts, totalCount) {
+    var since = Date.now() - 7 * 86400000;
+    var week = workouts.filter(function (w) { return new Date(w.start_time).getTime() >= since; });
+    var wkSets = 0, wkVol = 0;
+    week.forEach(function (w) {
+      (w.exercises || []).forEach(function (ex) {
+        workingSets(ex).forEach(function (s) {
+          wkSets++;
+          if (s.weight_kg != null && s.reps != null) wkVol += s.weight_kg * s.reps;
+        });
+      });
+    });
+    document.getElementById('hvWkWorkouts').textContent = String(week.length);
+    document.getElementById('hvWkVolume').textContent = fmtNum(wkVol);
+    document.getElementById('hvWkSets').textContent = String(wkSets);
+
+    var last = workouts.slice().sort(function (a, b) {
+      return new Date(b.start_time) - new Date(a.start_time);
+    })[0];
+    var listEl = document.getElementById('hvExList');
+    listEl.innerHTML = '';
+    if (last) {
+      document.getElementById('hvLastTitle').textContent = last.title || 'Workout';
+      document.getElementById('hvLastDate').textContent = relDate(last.start_time);
+      (last.exercises || []).forEach(function (ex) {
+        var li = document.createElement('li');
+        li.className = 'hv-ex';
+        var name = document.createElement('span');
+        name.className = 'hv-ex-name';
+        name.textContent = ex.title || 'Exercise';
+        var best = document.createElement('span');
+        best.className = 'hv-ex-best';
+        best.textContent = setLabel(bestSet(ex));
+        li.appendChild(name); li.appendChild(best);
+        listEl.appendChild(li);
+      });
+    } else {
+      document.getElementById('hvLastTitle').textContent = 'No workouts yet';
+      document.getElementById('hvLastDate').textContent = '';
+    }
+    document.getElementById('hvFoot').textContent =
+      (totalCount != null ? totalCount + ' workouts all-time · ' : '') + 'via Hevy';
+
+    stateEl.style.display = 'none';
+    bodyEl.style.display = '';
+  }
+
+  function load() {
+    setState('Loading…', false);
+    Promise.all([
+      api('/v1/workouts', 'page=1&pageSize=10'),
+      api('/v1/workouts/count')
+    ]).then(function (res) {
+      var wRes = res[0], cRes = res[1];
+      if (!wRes.ok) {
+        var err = (wRes.json && wRes.json.error) ? wRes.json.error : ('HTTP ' + wRes.status);
+        if (/HEVY_API_KEY/.test(err)) setState('Add HEVY_API_KEY in Vercel to connect Hevy.', false);
+        else setState('Hevy error: ' + err, true);
+        return;
+      }
+      var workouts = (wRes.json && wRes.json.workouts) || [];
+      var count = null;
+      if (cRes.ok && cRes.json) {
+        count = (cRes.json.workout_count != null) ? cRes.json.workout_count
+              : (cRes.json.count != null) ? cRes.json.count : null;
+      }
+      render(workouts, count);
+    }).catch(function (e) {
+      setState('Hevy error: ' + (e.message || e), true);
+    });
+  }
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', function () {
+      refreshBtn.classList.add('spin');
+      setTimeout(function () { refreshBtn.classList.remove('spin'); }, 500);
+      load();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', load, { once: true });
+  } else {
+    load();
+  }
 })();
 </script>
 
