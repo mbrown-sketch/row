@@ -104,25 +104,89 @@ window.__PLAN = {
     hypertrophy: '4×8 @ RPE 8 · start BW to +2.5kg',
     heavy: '5×3 @ RPE 8 · start +15 to +17.5kg'
   },
-  isoProtocol: '1–2 working sets each, every set to RPE 9–10, 8–15 reps, controlled eccentric.',
+  isoProtocol: '1–2 working sets each · every set to RPE 9–10 · 8–15 reps · controlled eccentric',
   // fixed weekly template: JS getDay() → session (2=Tue 3=Wed 5=Fri 6=Sat)
   sessions: {
-    2: { name: 'Lower A', tag: 'Squat HEAVY / Pull speed', heavy: 'squat',
-         second: { lift: 'deadlift', role: 'speed', text: 'speed pulls + clean pulls' }, clean: true,
-         explosive: 'Box jump 3×3 (step down)',
-         iso: 'ATG split squat 2×8/side · seated leg curl 1–2 · standing calf 2×15 · tibialis raise 2×20–25 · hanging straight-leg raise 2' },
-    3: { name: 'Upper A', tag: 'Bench HEAVY / Pull-up hypertrophy', heavy: 'bench',
-         second: { lift: 'pullup', role: 'hypertrophy' }, clean: false,
-         explosive: 'Med ball chest throw 5×3, max intent',
-         iso: 'chest-supported row 1–2 · low-to-high cable fly 1 · cable pullover 1–2 · lateral raise 1–2×12+ · reverse pec deck 1–2 · incline skull crusher 1–2 · cable external rotation 2×15 light' },
-    5: { name: 'Lower B', tag: 'Deadlift HEAVY / Squat hypertrophy', heavy: 'deadlift',
-         second: { lift: 'squat', role: 'hypertrophy', name: 'Paused back squat (2s)' }, clean: false,
-         explosive: 'Wall-loaded broad jump 4×3',
-         iso: 'leg extension 1–2 · lying leg curl 1–2 · cable standing hip flexion 2×12/side · seated calf 2×20 · Pallof press 2×12/side' },
-    6: { name: 'Upper B', tag: 'Pull-up HEAVY / Bench hypertrophy', heavy: 'pullup',
-         second: { lift: 'bench', role: 'hypertrophy' }, clean: false,
-         explosive: 'Med ball overhead slam 5×4',
-         iso: 'chest-supported / iso-lateral row 1–2 · lateral raise 1–2×12+ · preacher curl 2 · hammer curl 1 · single-arm pushdown 1 · band pull-apart 2×20 light' }
+    2: {
+      name: 'Lower A', tag: 'Squat HEAVY / Pull speed',
+      heavy: 'squat', second: { lift: 'deadlift', role: 'speed', text: 'speed pulls + clean pulls' }, clean: true,
+      pre: [
+        'Ankle mobilisation + quad isometrics — ~8 min',
+        'Patellar isometrics — 5 × 30–45s @ ~70% effort, knee at 60° (before squatting; analgesic lasts ~45 min)'
+      ],
+      explosive: { name: 'Box jump', presc: '3 × 3, step down' },
+      iso: [
+        ['ATG split squat', '2 × 8 / side'],
+        ['Seated leg curl', '1–2 → true failure'],
+        ['Standing calf raise (gastroc)', '2 × 15, full ROM'],
+        ['Tibialis raise', '2 × 20–25'],
+        ['Hanging straight-leg raise', '2']
+      ],
+      notes: [
+        'Cleans BEFORE squats — most technique-sensitive lift, needs to be fresh.',
+        'Straight-leg raise, not knees-to-chest — loads the hip flexors through the dolphin-kick range.',
+        'ATG split squats + tib raises are last so they don’t pre-fatigue the squat.'
+      ]
+    },
+    3: {
+      name: 'Upper A', tag: 'Bench HEAVY / Pull-up hypertrophy',
+      heavy: 'bench', second: { lift: 'pullup', role: 'hypertrophy' }, clean: false,
+      pre: ['General warm-up + shoulder prep'],
+      explosive: { name: 'Med ball chest throw', presc: '5 × 3, max intent' },
+      iso: [
+        ['Chest-supported row (elbows ~45°)', '1–2'],
+        ['Low-to-high cable fly', '1'],
+        ['Cable pullover', '1–2'],
+        ['Lateral raise', '1–2 × 12+'],
+        ['Reverse pec deck', '1–2'],
+        ['Incline skull crusher (EZ, behind head)', '1–2'],
+        ['Cable external rotation', '2 × 15 light (never near failure)']
+      ],
+      notes: [
+        'Bench in stiff elbow sleeves on heavy days — the 85 TM is a sleeved figure.',
+        'Pullovers live here, not Saturday.'
+      ]
+    },
+    5: {
+      name: 'Lower B', tag: 'Deadlift HEAVY / Squat hypertrophy',
+      heavy: 'deadlift', second: { lift: 'squat', role: 'hypertrophy', name: 'Paused back squat (2s pause)' }, clean: false,
+      pre: [
+        'Ankle mobilisation + quad isometrics — ~8 min',
+        'Patellar isometrics — 5 × 30–45s @ ~70% effort, knee at 60° (before squatting)'
+      ],
+      explosive: { name: 'Wall-loaded broad jump', presc: '4 × 3 (feet high, knees ~90°, arms in backstroke start)' },
+      iso: [
+        ['Leg extension', '1–2'],
+        ['Lying leg curl', '1–2 → true failure'],
+        ['Cable standing hip flexion (straight leg)', '2 × 12 / side'],
+        ['Seated calf raise (soleus)', '2 × 20'],
+        ['Pallof press', '2 × 12 / side']
+      ],
+      notes: [
+        'Deadlift never above 5 reps. Where volume is needed, more sets of 3.',
+        'Paused back squat, not front squat — the rack position limits breathing.',
+        'The Friday squat is a skill session as much as a volume one — highest-leverage item in the program.',
+        'Morning session: longer ramp (5–6 warm-ups), don’t drop the working weight.'
+      ]
+    },
+    6: {
+      name: 'Upper B', tag: 'Pull-up HEAVY / Bench hypertrophy',
+      heavy: 'pullup', second: { lift: 'bench', role: 'hypertrophy' }, clean: false,
+      pre: ['General warm-up + shoulder prep'],
+      explosive: { name: 'Med ball overhead slam', presc: '5 × 4' },
+      iso: [
+        ['Chest-supported / iso-lateral row', '1–2'],
+        ['Lateral raise', '1–2 × 12+'],
+        ['Preacher curl (don’t lock out at the bottom)', '2'],
+        ['Hammer curl', '1'],
+        ['Single-arm pushdown (straight down)', '1'],
+        ['Band pull-apart', '2 × 20 light (never near failure)']
+      ],
+      notes: [
+        'Only 5–6 isolation exercises — this is the session most likely to get cut when tired, so keep it short.',
+        'If a week has to lose a session, this is the one. Never cut Tuesday or Friday to save it.'
+      ]
+    }
   },
   // remaining bridge sessions (pre-plan). date = local ISO.
   bridge: [
@@ -1378,8 +1442,17 @@ img, video, canvas, svg { max-width: 100%; }
     .ns-tag.hold { background: rgba(255,255,255,0.08); color: var(--text-2); }
     .ns-tag.down { background: rgba(251,191,36,0.16); color: #fbbf24; }
     .ns-tag.coach { background: rgba(125,211,252,0.16); color: #7dd3fc; }
+    .ns-tag.speed { background: rgba(125,211,252,0.16); color: #7dd3fc; }
+    .ns-tag.hyp { background: rgba(255,255,255,0.08); color: var(--text-2); }
+    .ns-tag.heavy { background: rgba(251,191,36,0.16); color: #fbbf24; }
+    .ns-tag.deload { background: rgba(110,231,183,0.16); color: #6ee7b7; }
     .ns-clear { background: none; border: 0; color: var(--text-4); font-size: 13px; cursor: pointer; padding: 0 0 0 6px; }
     .ns-empty { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+    .ns-group { font: 700 9px/1 var(--font-mono); letter-spacing: 0.16em; color: var(--text-4); text-transform: uppercase; padding: 13px 2px 3px; border-top: 1px solid var(--border); }
+    .ns-list li.ns-group:first-child { border-top: 0; padding-top: 0; }
+    .ns-line { font-size: 11.5px; color: var(--text-3); line-height: 1.45; padding: 8px 12px; background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 9px; }
+    .ns-line.cue { border-left: 2px solid rgba(110,231,183,0.4); color: var(--text-2); }
+    .ns-row-target.dim { color: var(--text-2); font-weight: 500; }
     .coach-log { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
     .coach-msg { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
     .coach-msg-user { align-self: flex-end; background: rgba(125,211,252,0.12); border: 1px solid rgba(125,211,252,0.22); color: var(--text-1); max-width: 85%; }
@@ -4104,6 +4177,32 @@ img, video, canvas, svg { max-width: 100%; }
         + (sub ? '<span class="ns-row-why">' + escapeHtml(sub) + '</span>' : '')
         + '</li>';
     }
+    const group = (label) => '<li class="ns-group">' + escapeHtml(label) + '</li>';
+    const line = (text, cue) => '<li class="ns-line' + (cue ? ' cue' : '') + '">' + escapeHtml(text) + '</li>';
+    const exRow = (name, presc, dim) => '<li class="ns-row">'
+      + '<span class="ns-row-name">' + escapeHtml(name) + '</span>'
+      + '<span class="ns-row-target' + (dim ? ' dim' : '') + '">' + escapeHtml(presc || '—') + '</span></li>';
+    const exRowTag = (name, presc, cls) => '<li class="ns-row">'
+      + '<span class="ns-row-name">' + escapeHtml(name)
+      + (cls ? '<span class="ns-tag ' + cls + '">' + cls.toUpperCase() + '</span>' : '') + '</span>'
+      + '<span class="ns-row-target">' + escapeHtml(presc || '—') + '</span></li>';
+    function prepAndExplosive(sess) {
+      const r = [];
+      if (sess.pre && sess.pre.length) { r.push(group('Prep')); sess.pre.forEach((p) => r.push(line(p))); }
+      if (sess.explosive) { r.push(group('Explosive')); r.push(exRow(sess.explosive.name, sess.explosive.presc, true)); }
+      return r;
+    }
+    function isoRows(sess) {
+      const r = [group('Isolation · ' + PLAN.isoProtocol)];
+      (sess.iso || []).forEach((it) => r.push(exRow(it[0], it[1], true)));
+      return r;
+    }
+    function noteRows(sess) {
+      if (!sess.notes || !sess.notes.length) return [];
+      const r = [group('Notes')];
+      sess.notes.forEach((n) => r.push(line(n, true)));
+      return r;
+    }
     function heavyPrescription(lift, h) {
       if (h.note) return h.note;
       const kg = kgFromPct(lift, h.pct);
@@ -4142,7 +4241,8 @@ img, video, canvas, svg { max-width: 100%; }
         splitEl.textContent = nt.bridge.name;
         metaEl.textContent = 'bridge block';
         emptyEl.style.display = 'none';
-        listEl.innerHTML = setRow('Main work', nt.bridge.work, 'On-ramp begins Tue 1 Sep. Nothing above RPE 7.');
+        listEl.innerHTML = group('Session') + exRow('Main work', nt.bridge.work, true)
+          + group('Notes') + line('On-ramp (Block 0) begins Tue 1 Sep. Nothing above RPE 7 until then; two days off weights before the 1st.', true);
         return;
       }
 
@@ -4165,56 +4265,58 @@ img, video, canvas, svg { max-width: 100%; }
       }
       if (ctx.kind === 'gap') {
         metaEl.textContent = '';
-        listEl.innerHTML = setRow('Off-plan window', 'Holiday / post-meet', 'See the plan doc for the holiday guidance.');
+        listEl.innerHTML = setRow('Off-plan window', 'Holiday / post-meet', 'See the plan for the holiday guidance: 1–2 full-body sessions, 3×5 @ 65% squat + bench, chin-ups, a few jumps.');
         return;
       }
+
+      const rows = [];
+
       if (ctx.kind === 'summary') {
         metaEl.textContent = 'Block ' + ctx.block.n + ' · ' + ctx.block.name;
-        listEl.innerHTML = setRow(sess.name, ctx.block.name, ctx.block.summary)
-          + setRow('Explosive', sess.explosive, '')
-          + setRow('Isolation', PLAN.isoProtocol, sess.iso);
+        rows.push(group('This block'), line(ctx.block.summary, true));
+        rows.push.apply(rows, prepAndExplosive(sess));
+        rows.push.apply(rows, isoRows(sess));
+        rows.push.apply(rows, noteRows(sess));
+        listEl.innerHTML = rows.join('');
         return;
       }
 
       // ctx.kind === 'week'
       const w = ctx.week;
       metaEl.textContent = 'Block ' + ctx.block.n + ' · ' + ctx.block.name + ' · Wk ' + ctx.weekNo
-        + (w.deload ? ' (deload)' : '');
+        + (w.deload ? ' · deload' : '');
 
-      const rows = [];
-      rows.push(setRow('Explosive', sess.explosive, ''));
+      rows.push.apply(rows, prepAndExplosive(sess));
+      rows.push(group('Main'));
 
       // main heavy lift
       if (sess.heavy === 'pullup') {
-        rows.push(setRow('Weighted pull-up — heavy', PLAN.pullup.heavy, 'Own scheme — no % (see plan).', w.deload ? 'deload' : 'heavy'));
+        rows.push(exRowTag('Weighted pull-up — heavy', PLAN.pullup.heavy, w.deload ? 'deload' : 'heavy'));
       } else {
-        rows.push(setRow(PLAN.liftLabel[sess.heavy] + ' — heavy', heavyPrescription(sess.heavy, w.heavy),
-          w.deload ? 'Deload — leave it easy.' : '', w.deload ? 'deload' : 'heavy'));
+        rows.push(exRowTag(PLAN.liftLabel[sess.heavy] + ' — heavy', heavyPrescription(sess.heavy, w.heavy), w.deload ? 'deload' : 'heavy'));
       }
 
       // second lift
       const sec = sess.second;
       if (sec.lift === 'pullup') {
-        rows.push(setRow('Weighted pull-up — hypertrophy', PLAN.pullup.hypertrophy, 'Own scheme — no %.'));
+        rows.push(exRowTag('Weighted pull-up — hypertrophy', PLAN.pullup.hypertrophy, 'hyp'));
       } else if (sec.role === 'speed') {
-        rows.push(setRow('Deadlift — speed', sec.text || 'speed pulls', 'Fast off the floor, never above 5 reps.'));
+        rows.push(exRowTag('Deadlift — speed', sec.text || 'speed pulls', 'speed'));
       } else {
-        // hypertrophy uses the week's hyp row
-        const label = (sec.name || PLAN.liftLabel[sec.lift]) + ' — hypertrophy';
         const h = w.hyp || {};
         const kg = kgFromPct(sec.lift, h.pct);
         const presc = h.note ? h.note
           : (h.s != null ? h.s + '×' + h.r + ' @ ' + h.pct + '%' + (kg != null ? '  ·  ' + kg + unit() : '') : '—');
-        rows.push(setRow(label, presc, ''));
+        rows.push(exRowTag((sec.name || PLAN.liftLabel[sec.lift]) + ' — hypertrophy', presc, 'hyp'));
       }
 
       // clean (Lower A only)
       if (sess.clean && w.clean) {
-        rows.push(setRow('Power clean', w.clean === 'RETEST' ? 'Retest true max' : w.clean,
-          w.clean === 'RETEST' ? 'Technique-limited — retest before Block 3.' : 'Before the squat, while fresh.'));
+        rows.push(exRow('Power clean', w.clean === 'RETEST' ? 'Retest true max — technique-limited' : w.clean));
       }
 
-      rows.push(setRow('Isolation', PLAN.isoProtocol, sess.iso));
+      rows.push.apply(rows, isoRows(sess));
+      rows.push.apply(rows, noteRows(sess));
       listEl.innerHTML = rows.join('');
     }
     function escapeHtml(s) {
