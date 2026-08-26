@@ -1696,6 +1696,11 @@ img, video, canvas, svg { max-width: 100%; }
       <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Increment</label>
       <input type="number" id="exStep" step="0.5" value="2.5">
     </div>
+    <div class="po-field" id="exHevyField">
+      <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Hevy exercise <span style="font-weight:500;text-transform:none;letter-spacing:0">(for auto-sync)</span></label>
+      <select id="exHevy" class="po-ex-select" style="width:100%"><option value="">— not linked —</option></select>
+      <div id="exHevyHint" style="font-size:11px;color:var(--text-3);margin-top:5px;line-height:1.4"></div>
+    </div>
     <div class="po-modal-actions">
       <button class="po-btn-secondary" id="exModalCancel">Cancel</button>
       <button class="po-btn-primary" id="exModalSave">Save</button>
@@ -3582,6 +3587,251 @@ img, video, canvas, svg { max-width: 100%; }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pcFlushPushOnUnload();
   });
+
+  // ============================================================
+  // HEVY SYNC — pull real logged sets from Hevy into state.logs
+  // so the prescription engine runs off actual performance.
+  //   • Link each exercise to a Hevy template (edit modal <select>)
+  //   • "Sync Hevy" (button in the header) rebuilds each linked
+  //     exercise's Hevy-sourced logs from /v1/exercise_history —
+  //     one entry per workout: the top working set by est. 1RM.
+  //     Hand-entered logs (no `src`) are never touched.
+  // ============================================================
+  (function () {
+    const TPL_KEY = 'po_hevy_templates';   // cache: { at, list:[{id,title,is_custom}] }
+    let templates = null;
+
+    function hevyApi(path, extra) {
+      let qs = 'path=' + encodeURIComponent(path);
+      if (extra) qs += '&' + extra;
+      return fetch('/api/hevy?' + qs, { headers: { 'Accept': 'application/json' } })
+        .then((r) => r.text().then((t) => {
+          let j = null; try { j = JSON.parse(t); } catch (e) {}
+          return { ok: r.ok, status: r.status, json: j };
+        }));
+    }
+    function norm(s) {
+      return String(s || '').toLowerCase()
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    }
+    function loadTemplates() {
+      try {
+        const c = JSON.parse(localStorage.getItem(TPL_KEY));
+        if (c && Array.isArray(c.list) && (Date.now() - c.at) < 7 * 864e5) {
+          templates = c.list; return Promise.resolve(templates);
+        }
+      } catch (e) {}
+      const out = [];
+      const page = (p) => hevyApi('/v1/exercise_templates', 'page=' + p + '&pageSize=100').then((r) => {
+        if (!r.ok || !r.json) return out;
+        (r.json.exercise_templates || []).forEach((t) => out.push({ id: t.id, title: t.title, is_custom: !!t.is_custom }));
+        const pc = r.json.page_count || 1;
+        return p < pc ? page(p + 1) : out;
+      });
+      return page(1).then((list) => {
+        list.sort((a, b) => a.title.localeCompare(b.title));
+        templates = list;
+        // Only cache a non-empty list — an empty result usually means the
+        // proxy has no HEVY_API_KEY yet, and we don't want to pin that.
+        if (list.length) {
+          try { localStorage.setItem(TPL_KEY, JSON.stringify({ at: Date.now(), list })); } catch (e) {}
+        }
+        return list;
+      });
+    }
+    function matchExact(name) {
+      if (!templates) return null;
+      const n = norm(name); if (!n) return null;
+      const hits = templates.filter((t) => norm(t.title) === n);
+      if (!hits.length) return null;
+      return (hits.find((t) => !t.is_custom) || hits[0]).id;
+    }
+    function suggestTemplate(name) {
+      const ex = matchExact(name);
+      if (ex) return ex;
+      if (!templates) return null;
+      const n = norm(name); if (!n) return null;
+      const hits = templates.filter((t) => {
+        const tn = norm(t.title);
+        return tn && (tn.indexOf(n) === 0 || n.indexOf(tn) === 0);
+      });
+      if (!hits.length) return null;
+      return (hits.find((t) => !t.is_custom) || hits[0]).id;
+    }
+    function titleOf(id) {
+      const t = templates && templates.find((x) => x.id === id);
+      return t ? t.title : null;
+    }
+    // kg → the exercise's display unit, snapped to its increment
+    function toUnit(kg, ex) {
+      const v = (state.units === 'lb') ? kg * 2.20462 : kg;
+      const step = ex.step || (state.units === 'lb' ? 5 : 2.5);
+      return roundToStep(v, step);
+    }
+    // /v1/exercise_history entries → [{ weight, reps, date, src:'hevy', wid }]
+    function historyToLogs(entries, ex) {
+      const byWorkout = {};
+      (entries || []).forEach((e) => {
+        if (!e || e.set_type === 'warmup') return;
+        const w = e.weight_kg, r = e.reps;
+        if (w == null && r == null) return;
+        const key = e.workout_id || e.workout_start_time;
+        const score = ex.bw ? (r || 0) : estimate1RM(w || 0, r || 0);
+        const cur = byWorkout[key];
+        if (!cur || score > cur.score) {
+          byWorkout[key] = { score, entry: {
+            weight: ex.bw ? 0 : toUnit(w || 0, ex),
+            reps: r || 0,
+            date: e.workout_start_time,
+            src: 'hevy',
+            wid: key
+          } };
+        }
+      });
+      return Object.keys(byWorkout).map((k) => byWorkout[k].entry)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+    function mergeLogs(exId, hevyLogs) {
+      const manual = (state.logs[exId] || []).filter((l) => l && l.src !== 'hevy');
+      const all = manual.concat(hevyLogs).sort((a, b) => new Date(a.date) - new Date(b.date));
+      if (all.length) state.logs[exId] = all; else delete state.logs[exId];
+    }
+
+    let syncing = false;
+    function syncAll(btn) {
+      if (syncing) return;
+      syncing = true;
+      const label = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+      const done = (msg) => {
+        syncing = false;
+        if (btn) { btn.disabled = false; btn.textContent = label; }
+        toast(msg);
+      };
+
+      loadTemplates().then(() => {
+        if (!templates || !templates.length) {
+          done('Couldn’t reach Hevy — set HEVY_API_KEY in Vercel, then redeploy.');
+          return;
+        }
+        let autoLinked = 0;
+        const unlinked = [];
+        state.exercises.forEach((ex) => {
+          if (!ex.hevyId) {
+            const m = matchExact(ex.name);
+            if (m) { ex.hevyId = m; autoLinked++; }
+          }
+          if (!ex.hevyId) unlinked.push(ex.name);
+        });
+        const targets = state.exercises.filter((ex) => ex.hevyId);
+        if (!targets.length) {
+          done('No exercises linked to Hevy yet — open one → Edit → pick its Hevy exercise.');
+          return;
+        }
+        const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+        const until = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+        let imported = 0, failed = 0;
+        Promise.all(targets.map((ex) =>
+          hevyApi('/v1/exercise_history/' + encodeURIComponent(ex.hevyId), 'start_date=' + since + '&end_date=' + until)
+            .then((r) => {
+              if (!r.ok || !r.json) { failed++; return; }
+              const logs = historyToLogs(r.json.exercise_history || [], ex);
+              mergeLogs(ex.id, logs);
+              imported += logs.length;
+            })
+            .catch(() => { failed++; })
+        )).then(() => {
+          saveState();
+          renderAll();
+          let msg = 'Synced ' + targets.length + ' exercise' + (targets.length === 1 ? '' : 's')
+            + ' · ' + imported + ' sessions from Hevy';
+          if (autoLinked) msg += ' · auto-linked ' + autoLinked;
+          if (failed) msg += ' · ' + failed + ' failed';
+          if (unlinked.length) msg += ' · unlinked: ' + unlinked.join(', ');
+          done(msg);
+        });
+      }).catch((e) => done('Hevy sync failed: ' + (e && e.message || e)));
+    }
+
+    function toast(msg) {
+      let t = document.getElementById('hevyToast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'hevyToast';
+        t.style.cssText = 'position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:calc(100vw - 32px);background:#16161a;border:1px solid var(--border-strong);color:var(--text-1);font:600 12px/1.45 var(--font);padding:11px 15px;border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,0.55);z-index:200;text-align:center;opacity:0;transition:opacity .3s;';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      requestAnimationFrame(() => { t.style.opacity = '1'; });
+      clearTimeout(t._to);
+      t._to = setTimeout(() => { t.style.opacity = '0'; }, 6000);
+    }
+
+    // "Sync Hevy" button in the coach header
+    const hdr = document.querySelector('.po-header');
+    if (hdr) {
+      const sb = document.createElement('button');
+      sb.id = 'hevySyncBtn';
+      sb.type = 'button';
+      sb.textContent = 'Sync Hevy';
+      sb.style.cssText = 'margin-left:auto;background:rgba(110,231,183,0.12);border:1px solid rgba(110,231,183,0.30);color:#6ee7b7;font:700 11px/1 var(--font);letter-spacing:0.04em;padding:9px 13px;border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+      const gear = document.getElementById('settingsBtn');
+      hdr.insertBefore(sb, gear || null);
+      sb.addEventListener('click', () => syncAll(sb));
+    }
+
+    // Populate the edit-modal <select> when the modal opens
+    const sel = document.getElementById('exHevy');
+    const hint = document.getElementById('exHevyHint');
+    function fillSelect(selectedId) {
+      if (!sel) return;
+      loadTemplates().then((list) => {
+        sel.innerHTML = '<option value="">— not linked —</option>' + (list || []).map((t) =>
+          '<option value="' + t.id + '">' + t.title.replace(/</g, '&lt;') + (t.is_custom ? ' (custom)' : '') + '</option>'
+        ).join('');
+        sel.value = selectedId || '';
+        updateHint();
+      });
+    }
+    function updateHint() {
+      if (!hint) return;
+      if (sel && sel.value) { hint.textContent = 'Sessions import from ' + (titleOf(sel.value) || 'this Hevy exercise') + '.'; return; }
+      const g = suggestTemplate((document.getElementById('exName').value || '').trim());
+      hint.textContent = g ? ('Suggested: ' + titleOf(g) + ' — pick it, or leave unlinked to log by hand.')
+                           : 'Optional. Leave unlinked to log this exercise by hand.';
+    }
+    if (sel) sel.addEventListener('change', updateHint);
+    const nameInput = document.getElementById('exName');
+    if (nameInput) nameInput.addEventListener('input', () => { if (sel && !sel.value) updateHint(); });
+
+    // Wrap openExModal so the Hevy field fills in with the exercise's current link
+    if (typeof openExModal === 'function') {
+      const _open = openExModal;
+      openExModal = function (mode, ex) {
+        _open(mode, ex);
+        fillSelect(mode === 'edit' && ex ? (ex.hevyId || '') : '');
+      };
+    }
+    // After the original Save handler runs, persist the chosen Hevy link
+    const saveBtn = document.getElementById('exModalSave');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        if (!sel) return;
+        if (document.getElementById('exModalBg').classList.contains('show')) return; // save was rejected
+        const id = editingExId || state.currentEx;
+        const ex = state.exercises.find((e) => e.id === id);
+        if (!ex) return;
+        const val = sel.value || '';
+        if ((ex.hevyId || '') !== val) {
+          if (val) ex.hevyId = val; else delete ex.hevyId;
+          saveState();
+          renderAll();
+        }
+      });
+    }
+  })();
 })();
 </script>
 
