@@ -532,7 +532,7 @@ main {
   (function () {
     const KEY = 'whoop_tokens_v1';
     const CLIENT_ID = '970a969e-d2fd-4f03-8bfd-687bdb5ed6a9';
-    const REDIRECT  = window.location.origin + '/api/whoop-callback';
+    const REDIRECT  = 'https://row-phi-seven.vercel.app/api/whoop-callback';
     const SCOPES    = 'read:recovery read:sleep read:workout read:cycles read:profile read:body_measurement offline';
     function loadTokens() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } }
     function saveTokens(t) { try { localStorage.setItem(KEY, JSON.stringify(t)); } catch {} }
