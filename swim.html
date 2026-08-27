@@ -215,6 +215,37 @@ tbody tr:last-child td { border-bottom: 0; }
 .tl-form input:focus, .tl-form select:focus { border-color: rgba(255,255,255,0.28); }
 .tl-form .gm-add { align-self: flex-start; }
 
+.gm-add {
+  padding: 10px 18px; border: 0; border-radius: 12px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%);
+  color: #0A0A0B; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 2px 8px rgba(0,0,0,0.35);
+  transition: transform 0.1s, filter 0.15s;
+}
+.gm-add:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.gm-ghost {
+  padding: 9px 15px; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px; background: rgba(255,255,255,0.04);
+  color: var(--text-primary); font-family: inherit; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.03em; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.gm-ghost:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.2); }
+.gm-ghost:disabled { opacity: 0.5; cursor: default; }
+
+.tl-sync { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.tl-sync-hint { font: 500 11px/1.4 var(--font-mono); color: var(--text-tertiary); }
+.tl-found {
+  border: 1px solid rgba(125,211,252,0.3); background: rgba(125,211,252,0.06);
+  border-radius: 12px; padding: 12px; margin-bottom: 12px;
+}
+.tl-found h4 { margin: 0 0 8px; font: 700 10px/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--water); }
+.tl-found label { display: flex; align-items: baseline; gap: 9px; padding: 6px 0; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.tl-found label input { flex-shrink: 0; }
+.tl-found .tf-time { font-family: var(--font-mono); font-weight: 700; color: var(--text-primary); }
+.tl-found .tf-actions { display: flex; gap: 8px; margin-top: 10px; }
+.tl-found .tf-none { font-size: 12px; color: var(--text-tertiary); }
+
 footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-size: 11.5px; line-height: 1.6; }
 
 @media (max-width: 480px) {
@@ -466,6 +497,11 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
     <div class="section-title">Time log</div>
     <div class="gm-card">
       <div class="tl-summary" id="tlSummary"></div>
+      <div class="tl-sync">
+        <button type="button" class="gm-ghost" id="tlPullBtn">Pull from Swim England</button>
+        <span class="tl-sync-hint" id="tlSyncHint"></span>
+      </div>
+      <div class="tl-found" id="tlFound" style="display:none"></div>
       <ul class="goal-list" id="tlList"></ul>
       <form class="tl-form" id="tlForm">
         <div class="tl-grid">
@@ -625,11 +661,11 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
   // ---------- Time log — editable, synced ----------
   var TL_KEY = 'swim:times';
   var TL_SEED = [
-    { id: 's1', date: '2025-05-31', time: 27.99, course: 'SC', round: 'F', context: 'Masters, Birmingham' },
-    { id: 's2', date: '2025-10-26', time: 27.81, course: 'SC', round: 'H', context: 'Masters Nationals, Sheffield' },
-    { id: 's3', date: '2026-05-09', time: 28.22, course: 'LC', round: 'H', context: 'Level 1, Derby' },
-    { id: 's4', date: '2026-05-10', time: 28.00, course: 'LC', round: 'H', context: 'Masters, Sandwell' },
-    { id: 's5', date: '2026-07-12', time: 27.32, course: 'SC', round: 'H', context: 'Level 4, Long Eaton' }
+    { id: 's1', date: '2025-05-31', time: 27.99, course: 'SC', round: 'F', context: 'Masters, Birmingham', category: 'masters' },
+    { id: 's2', date: '2025-10-26', time: 27.81, course: 'SC', round: 'H', context: 'Masters Nationals, Sheffield', category: 'masters' },
+    { id: 's3', date: '2026-05-09', time: 28.22, course: 'LC', round: 'H', context: 'Level 1, Derby', category: 'open' },
+    { id: 's4', date: '2026-05-10', time: 28.00, course: 'LC', round: 'H', context: 'Masters, Sandwell', category: 'masters' },
+    { id: 's5', date: '2026-07-12', time: 27.32, course: 'SC', round: 'H', context: 'Level 4, Long Eaton', category: 'open' }
   ];
   function tlLoad() {
     try {
@@ -647,18 +683,21 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
     var sumEl = document.getElementById('tlSummary');
     if (!listEl) return;
     var items = tlLoad().slice().sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
-    var bestLC = null, bestSC = null;
+    var best = { LC: null, SC: null }, bestM = { LC: null, SC: null };
     items.forEach(function (i) {
-      var t = parseFloat(i.time); if (isNaN(t)) return;
-      if (i.course === 'LC') { if (bestLC == null || t < bestLC) bestLC = t; }
-      else { if (bestSC == null || t < bestSC) bestSC = t; }
+      var t = parseFloat(i.time); if (isNaN(t) || (i.course !== 'LC' && i.course !== 'SC')) return;
+      if (best[i.course] == null || t < best[i.course]) best[i.course] = t;
+      if (i.category === 'masters' && (bestM[i.course] == null || t < bestM[i.course])) bestM[i.course] = t;
     });
     if (sumEl) {
+      var gapRef = bestM.LC != null ? bestM.LC : best.LC;
       var parts = [];
-      if (bestLC != null) parts.push('Best LC <strong>' + bestLC.toFixed(2) + '</strong> · to 26.50 target ' + (bestLC - 26.5).toFixed(2) + 's');
-      if (bestSC != null) parts.push('Best SC <strong>' + bestSC.toFixed(2) + '</strong>');
+      if (best.LC != null) parts.push('Best LC <strong>' + best.LC.toFixed(2) + '</strong>' + (bestM.LC != null && bestM.LC !== best.LC ? ' · masters ' + bestM.LC.toFixed(2) : ''));
+      if (best.SC != null) parts.push('Best SC <strong>' + best.SC.toFixed(2) + '</strong>' + (bestM.SC != null && bestM.SC !== best.SC ? ' · masters ' + bestM.SC.toFixed(2) : ''));
+      if (gapRef != null) parts.push('to 26.50 target ' + (gapRef - 26.5).toFixed(2) + 's');
       sumEl.innerHTML = parts.join('  ·  ') || 'No times logged yet.';
     }
+    var bestLC = best.LC, bestSC = best.SC;
     listEl.innerHTML = items.map(function (i) {
       var t = parseFloat(i.time);
       var pb = (i.course === 'LC' && t === bestLC) || (i.course === 'SC' && t === bestSC);
@@ -708,6 +747,78 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
     });
   }
   tlRender();
+
+  // ---------- Pull best times from Swim England Rankings ----------
+  function tlSecs(t) {
+    // "27.81" -> 27.81 ; "1:01.93" -> 61.93
+    var m = /^(\d+):(\d{2}\.\d{2})$/.exec(t);
+    return m ? (parseInt(m[1], 10) * 60 + parseFloat(m[2])) : parseFloat(t);
+  }
+  function tlHas(list, date, course, secs) {
+    return list.some(function (x) {
+      return x.date === date && x.course === course && Math.abs(parseFloat(x.time) - secs) < 0.005;
+    });
+  }
+  var pullBtn = document.getElementById('tlPullBtn');
+  var syncHint = document.getElementById('tlSyncHint');
+  var foundEl = document.getElementById('tlFound');
+  if (pullBtn) {
+    pullBtn.addEventListener('click', function () {
+      pullBtn.disabled = true;
+      syncHint.textContent = 'Checking swimmingresults.org…';
+      foundEl.style.display = 'none';
+      fetch('/api/swim-times', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          pullBtn.disabled = false;
+          if (!res.ok || res.j.error) { syncHint.textContent = 'Error: ' + (res.j.error || 'failed'); return; }
+          var log = tlLoad();
+          var novel = (res.j.times || []).filter(function (t) {
+            return t.date && !tlHas(log, t.date, t.course, tlSecs(t.time));
+          });
+          syncHint.textContent = 'Pulled ' + (res.j.count || 0) + ' best times' + (res.j.since ? ' (after ' + (res.j.since - 1) + ')' : '')
+            + ' · ' + novel.length + ' new';
+          if (!novel.length) { foundEl.innerHTML = ''; foundEl.style.display = 'none'; return; }
+          foundEl.style.display = '';
+          foundEl.innerHTML = '<h4>New from Swim England</h4>'
+            + novel.map(function (t, i) {
+                return '<label><input type="checkbox" data-i="' + i + '" checked>'
+                  + '<span class="tf-time">' + esc(t.time) + '</span> '
+                  + esc(t.event + ' · ' + t.course + ' · ' + (t.category === 'masters' ? 'Masters' : 'Open') + ' · ' + tlFmtDate(t.date))
+                  + '<br><span style="color:var(--text-tertiary);font-size:11px">' + esc(t.meet || '') + '</span></label>';
+              }).join('')
+            + '<div class="tf-actions"><button type="button" class="gm-add" id="tlAddFound">Add selected</button>'
+            + '<button type="button" class="gm-ghost" id="tlDismissFound">Dismiss</button></div>';
+          foundEl._novel = novel;
+          document.getElementById('tlDismissFound').addEventListener('click', function () { foundEl.style.display = 'none'; });
+          document.getElementById('tlAddFound').addEventListener('click', function () {
+            var picks = [];
+            foundEl.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+              if (cb.checked) picks.push(foundEl._novel[parseInt(cb.getAttribute('data-i'), 10)]);
+            });
+            if (!picks.length) return;
+            var list = tlLoad();
+            picks.forEach(function (t) {
+              list.push({
+                id: 'se' + Date.now() + Math.random().toString(36).slice(2, 5),
+                date: t.date,
+                time: tlSecs(t.time),
+                course: t.course,
+                round: 'H',
+                context: (t.meet || 'Swim England') + (t.category === 'masters' ? ' · Masters' : '') + (t.level ? ' · L' + t.level : ''),
+                category: t.category,
+                src: 'swimengland'
+              });
+            });
+            tlSave(list);
+            foundEl.style.display = 'none';
+            syncHint.textContent = 'Added ' + picks.length + '.';
+            tlRender();
+          });
+        })
+        .catch(function (e) { pullBtn.disabled = false; syncHint.textContent = 'Error: ' + (e.message || e); });
+    });
+  }
 
   if (window.initCloudSync) {
     window.initCloudSync({
