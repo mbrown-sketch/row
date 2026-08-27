@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="lock.js"></script>                                  <!-- passcode lock screen -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<title>Swim — 50 Back to Budapest</title>
+
+<!-- Shared dashboard scripts. Keep these in this order. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+
+<style>
+:root {
+  --text-primary: #FAFAFA;
+  --text-secondary: #B8B6B0;
+  --text-tertiary: #76746E;
+  --success: #6BE3A4;
+  --warning: #F2C063;
+  --danger:  #FF6B6B;
+  --water:   #7DD3FC;
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #050506;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: max(28px, env(safe-area-inset-top)) 20px 60px;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 82% 14%, rgba(125, 211, 252, 0.14), transparent 45%),
+    radial-gradient(circle at 18% 90%, rgba(180, 180, 200, 0.06), transparent 50%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: -2;
+  animation: drift 36s ease-in-out infinite alternate;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
+  background-size: 3px 3px;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes drift {
+  0%   { transform: translate3d(0,0,0); }
+  100% { transform: translate3d(-22px, 14px, 0); }
+}
+
+.page { max-width: 1100px; margin: 0 auto; }
+
+.dash-title {
+  margin: 0 0 4px;
+  font-size: 28px; font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+@media (max-width: 480px) { .dash-title { font-size: 22px; } }
+.dek { color: var(--text-tertiary); font-size: 13px; margin: 0 0 18px; }
+
+/* section heading with divider line */
+.section { margin-top: 8px; }
+.section-title {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.section-title::before { content: ''; width: 18px; height: 1px; background: var(--text-tertiary); opacity: 0.6; }
+.section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent); }
+
+.gm-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+.gm-card p { max-width: 68ch; line-height: 1.6; font-size: 14px; }
+.gm-card p:last-child { margin-bottom: 0; }
+.gm-card h4 { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 18px 0 8px; }
+.gm-card h4:first-child { margin-top: 0; }
+strong { color: var(--text-primary); font-weight: 600; }
+em { color: var(--water); font-style: normal; }
+
+/* stat strip */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 6px; }
+.stat {
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px; padding: 13px 14px;
+}
+.stat-num { font: 700 20px/1 var(--font-mono); color: var(--text-primary); letter-spacing: -0.02em; }
+.stat-num.hi { color: var(--water); }
+.stat-label { margin-top: 6px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-tertiary); }
+.stat-label small { display: block; margin-top: 3px; color: var(--text-tertiary); font-weight: 400; letter-spacing: 0.02em; }
+
+/* next-race card */
+.race-now { display: flex; flex-direction: column; gap: 4px; }
+.race-now .rn-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.race-now .rn-name { font: 700 18px/1.15 var(--font); color: var(--text-primary); }
+.race-now .rn-count { font: 700 14px/1 var(--font-mono); color: var(--water); white-space: nowrap; }
+.race-now .rn-meta { font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono); }
+.race-now .rn-tier {
+  display: inline-block; margin-top: 8px;
+  font: 700 10px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 8px; border-radius: 6px;
+  background: rgba(125,211,252,0.14); color: var(--water);
+}
+.race-list { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 7px; }
+.race-list li { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; font-size: 12px; align-items: baseline; }
+.race-list .rl-date { font-family: var(--font-mono); color: var(--text-tertiary); }
+.race-list .rl-name { color: var(--text-secondary); min-width: 0; }
+.race-list .rl-tier { font-family: var(--font-mono); color: var(--text-tertiary); font-size: 11px; white-space: nowrap; }
+
+/* levers */
+ol.levers { margin: 0; padding-left: 1.2rem; max-width: 68ch; }
+ol.levers li { margin: 8px 0; line-height: 1.55; font-size: 14px; }
+ul.plain { padding-left: 1.1rem; max-width: 68ch; margin: 8px 0; }
+ul.plain li { margin: 6px 0; line-height: 1.55; font-size: 13.5px; }
+
+/* tables */
+.scroll { overflow-x: auto; margin: 4px 0 6px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 12.5px; }
+caption { text-align: left; padding: 10px 14px; background: rgba(255,255,255,0.04); font: 600 10px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: top; }
+thead th { background: rgba(255,255,255,0.03); font: 600 9.5px/1.3 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-tertiary); white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+.t-num { font-family: var(--font-mono); color: var(--warning); font-weight: 600; white-space: nowrap; }
+.t-hi { font-family: var(--font-mono); color: var(--success); font-weight: 600; white-space: nowrap; }
+.t-dim { color: var(--text-tertiary); }
+
+/* note callouts */
+.note { border-left: 3px solid var(--success); background: rgba(107,227,164,0.06); padding: 12px 14px; border-radius: 0 10px 10px 0; margin: 12px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.55; }
+.note:last-child { margin-bottom: 0; }
+.note.warn { border-left-color: var(--warning); background: rgba(242,192,99,0.06); }
+.note p { margin: 0; max-width: none; font-size: 13px; }
+.note p + p { margin-top: 7px; }
+
+/* open-items checklist */
+.goal-list { list-style: none; margin: 0; padding: 0; }
+.gm-group { font: 700 9.5px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); margin: 14px 0 8px; }
+.gm-group:first-child { margin-top: 0; }
+.gm-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 11px 13px; margin-bottom: 6px;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  transition: background 0.2s, opacity 0.3s;
+}
+.gm-row.gm-row-done { opacity: 0.45; }
+.gm-row.gm-row-done .gm-text { text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.4); }
+.gm-check {
+  appearance: none; -webkit-appearance: none;
+  width: 20px; height: 20px; flex-shrink: 0; margin: 1px 0 0;
+  border: 1.5px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.28); border-radius: 6px;
+  position: relative; cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.gm-check:checked { background: var(--success); border-color: var(--success); }
+.gm-check:checked::after {
+  content: ''; position: absolute; left: 6px; top: 2px;
+  width: 5px; height: 10px; border: solid #0A0A0B; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+}
+.gm-text { flex: 1; font-size: 13px; line-height: 1.5; color: var(--text-primary); }
+.gm-text small { display: block; margin-top: 2px; color: var(--text-tertiary); font-size: 11.5px; }
+
+footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-size: 11.5px; line-height: 1.6; }
+
+@media (max-width: 480px) {
+  body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
+  .gm-card { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1 class="dash-title">50 Back to Budapest</h1>
+  <p class="dek">World Aquatics Masters Championships · Budapest · 3–9 July 2027 · men's 25–29 · <span id="budapestCountdown">—</span></p>
+
+  <!-- ===== headline numbers ===== -->
+  <div class="section">
+    <div class="section-title">Standing</div>
+    <div class="gm-card">
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-num hi">26.50</div><div class="stat-label">Target LCM</div></div>
+        <div class="stat"><div class="stat-num">28.00</div><div class="stat-label">Current LCM<small>10 May 26</small></div></div>
+        <div class="stat"><div class="stat-num">1.50</div><div class="stat-label">Gap<small>seconds</small></div></div>
+        <div class="stat"><div class="stat-num">27.81</div><div class="stat-label">Best SCM<small>banked · Masters Nats</small></div></div>
+        <div class="stat"><div class="stat-num">2 / wk</div><div class="stat-label">Swim<small>Mon + Thu, sprint</small></div></div>
+        <div class="stat"><div class="stat-num">25–29</div><div class="stat-label">Masters band<small>first, hardest</small></div></div>
+      </div>
+      <p style="margin-top:14px">Half a second came off across the last twelve months without a structured sprint block. The remaining 1.5 is a training problem — <em>not</em> an age problem — and it has to come from the underwater and the transition, not from stroke rate.</p>
+    </div>
+  </div>
+
+  <!-- ===== next race (dynamic) ===== -->
+  <div class="section">
+    <div class="section-title">Next Race</div>
+    <div class="gm-card">
+      <div class="race-now" id="raceNow">
+        <div class="rn-top"><span class="rn-name" id="rnName">—</span><span class="rn-count" id="rnCount">—</span></div>
+        <div class="rn-meta" id="rnMeta">—</div>
+        <span class="rn-tier" id="rnTier">—</span>
+      </div>
+      <ul class="race-list" id="raceList"></ul>
+    </div>
+  </div>
+
+  <!-- ===== where the 1.5s comes from ===== -->
+  <div class="section">
+    <div class="section-title">Where the 1.5 s comes from</div>
+    <div class="gm-card">
+      <ol class="levers">
+        <li><strong>15 m underwater phase</strong> — the largest single opportunity.</li>
+        <li><strong>15–20 m transition</strong> — the breakout into stroke. Currently the main leak.</li>
+        <li><strong>Backstroke start</strong> — under-trained; two sessions a week rarely leave room for it.</li>
+      </ol>
+      <p>Stroke rate is <strong>not</strong> a realistic lever at two sessions a week.</p>
+
+      <h4>Constraints on the coached sessions</h4>
+      <ul class="plain">
+        <li><strong>Fins mask the problem</strong> — they carry you through exactly the metres where time is lost. Push for 15–25 m unassisted; save fins for over-speed and the 35–50 m efforts.</li>
+        <li><strong>Resisted work stays light</strong> — light enough that stroke rate holds. Heavy tow builds a slower pattern.</li>
+        <li><strong>Ask for starts</strong> — 5–6 backstroke starts in the last ten minutes of Thursday, from late September.</li>
+        <li><strong>Third session from January</strong> if pool access allows — uncoached, 30 min of starts, breakouts and 15s.</li>
+      </ul>
+
+      <h4>Standard test set — every 6–8 weeks, identical protocol</h4>
+      <ul class="plain">
+        <li>15 m from push</li>
+        <li>25 m from start</li>
+        <li>50 m broken</li>
+      </ul>
+      <p class="t-dim" style="font-size:12.5px">Log 15 m split, breakout distance and stroke count at every race.</p>
+    </div>
+  </div>
+
+  <!-- ===== weekly rhythm ===== -->
+  <div class="section">
+    <div class="section-title">Weekly rhythm</div>
+    <div class="gm-card">
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Day</th><th>Session</th><th>Content</th></tr></thead>
+          <tbody>
+            <tr><td>Mon</td><td>Swim</td><td>Technique, then resisted (light load)</td></tr>
+            <tr><td>Tue</td><td>Gym — Lower A</td><td>Squat heavy · deadlift speed + power clean</td></tr>
+            <tr><td>Wed</td><td>Gym — Upper A</td><td>Bench heavy · pull-up hypertrophy</td></tr>
+            <tr><td>Thu</td><td>Swim</td><td>Sprint 15–50 m · fins only when pushing distance · starts from late Sep</td></tr>
+            <tr><td>Fri</td><td>Gym — Lower B</td><td>Deadlift heavy · squat hypertrophy</td></tr>
+            <tr><td>Sat</td><td>Gym — Upper B</td><td>Pull-up heavy · bench hypertrophy</td></tr>
+            <tr><td>Sun</td><td>Off</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note warn"><p>No same-day clashes. The heaviest 24 hours is <strong>Thursday sprint into Friday deadlift</strong> — revisit in January when the RPE-8 cap lifts.</p></div>
+    </div>
+  </div>
+
+  <!-- ===== entry times ===== -->
+  <div class="section">
+    <div class="section-title">Entry times</div>
+    <div class="gm-card">
+      <div class="scroll">
+        <table>
+          <caption>In hand</caption>
+          <thead><tr><th>Purpose</th><th>Time</th><th>Course</th><th>Date</th><th>Meet</th></tr></thead>
+          <tbody>
+            <tr><td>Non-masters entry</td><td class="t-num">28.22</td><td>LC</td><td>09 May 26</td><td>Derby Excel LCQ · Level 1</td></tr>
+            <tr><td>Masters entry / seeding</td><td class="t-num">28.00</td><td>LC</td><td>10 May 26</td><td>Sandwell Masters</td></tr>
+            <tr><td>Masters entry / seeding</td><td class="t-hi">27.81</td><td>SC</td><td>26 Oct 25</td><td>Swim England National Masters</td></tr>
+            <tr><td class="t-dim">Superseded</td><td class="t-dim">27.99</td><td>SC</td><td>31 May 25</td><td class="t-dim">Steve's Team &amp; UoB Masters</td></tr>
+            <tr><td class="t-dim">Unusable for entry</td><td class="t-dim">27.32</td><td>SC</td><td>12 Jul 26</td><td class="t-dim">Long Eaton Club Champs · Level 4</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px">28.22 LC converts to roughly <strong>27.3–27.5 SC</strong> for short-course entries.</p>
+
+      <h4>Licensing rules</h4>
+      <ul class="plain">
+        <li><strong>Non-masters</strong> (Counties, Regionals, GB Champs, Summer Champs): Level 1 (LC) &amp; Level 2 (SC) enable National / Regional / County QTs; Level 3 enables Regional &amp; County; <strong>Level 4 is entry-level</strong>, not a route into county/regional champs. <strong>Masters times cannot be used</strong> — MAS meets sit at Level 0.</li>
+        <li>LC → SC converted times are commonly accepted for SC entries; confirm per meet.</li>
+        <li><strong>Masters</strong> (British Masters, Budapest): masters times work. 27.81 SC from Masters Nationals means presence in the Masters Rankings database is assured. Whether non-masters times carry across is <strong>unconfirmed</strong> — see open items.</li>
+        <li>100 back &amp; 50 free: Level 1 and masters times exist for both; qualification is not in doubt.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===== season calendar ===== -->
+  <div class="section">
+    <div class="section-title">Season calendar</div>
+    <div class="gm-card">
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Date</th><th>Meet</th><th>Course</th><th>Events</th><th>Approach</th></tr></thead>
+          <tbody>
+            <tr><td>18 Oct 26</td><td>Derbyshire SC Counties · Moorways</td><td>SC</td><td>50bk (+100bk/50fr)</td><td>Race through, skip Sat gym</td></tr>
+            <tr><td>6–8 Nov 26</td><td>East Midlands Regional SC · Harvey Hadden</td><td>SC</td><td>50bk (+100bk/50fr)</td><td>Race through, skip Sat gym</td></tr>
+            <tr><td class="t-dim">Early–mid Dec 26</td><td class="t-dim">Open SC — to find</td><td>SC</td><td>50bk +</td><td>Race through</td></tr>
+            <tr><td>30/31 Jan + 6/7 Feb 27</td><td>Derbyshire LC Counties · Moorways</td><td>LC</td><td>50bk (+1)</td><td>Freshen 7 days</td></tr>
+            <tr><td class="t-dim">Late Feb 27</td><td class="t-dim">Open LC — standby</td><td>LC</td><td>50bk</td><td>Race through</td></tr>
+            <tr><td class="t-dim">Mid–late Mar 27</td><td class="t-dim">Derbyshire Masters Open · Moorways</td><td>LC</td><td>50bk (+1)</td><td>Date-dependent</td></tr>
+            <tr><td><strong>6–11 Apr 27</strong></td><td><strong>GB Championships · London</strong></td><td>LC</td><td>50bk only</td><td>10-day taper</td></tr>
+            <tr><td class="t-dim">Late Apr / early May 27</td><td class="t-dim">EM Regionals LC · Moorways + Corby</td><td>LC</td><td>50bk +</td><td>Race through</td></tr>
+            <tr><td class="t-dim">Mid–late May 27</td><td class="t-dim">Open LC — to find</td><td>LC</td><td>50bk only</td><td>Freshen 5 days</td></tr>
+            <tr><td>11–13 Jun 27</td><td>British Masters · Sunderland</td><td>LC</td><td>50bk only</td><td>Freshen 7 days</td></tr>
+            <tr><td>19 Jun 27</td><td>Taper begins</td><td>—</td><td>—</td><td>14 days</td></tr>
+            <tr><td><strong>3–9 Jul 27</strong></td><td><strong>World Masters 25–29 · Budapest</strong></td><td>LC</td><td>50bk only</td><td>Full taper</td></tr>
+            <tr><td class="t-dim">Late Jul / Aug 27</td><td class="t-dim">English Summer Champs</td><td>LC</td><td>50bk +</td><td>Ride residual fitness</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12.5px" class="t-dim"><strong>Confirmed:</strong> 18 Oct · 6–8 Nov · 30/31 Jan + 6/7 Feb · 6–11 Apr · 11–13 Jun · 3–9 Jul.  <strong>Awaiting release:</strong> Derbyshire Masters Open · EM Regionals LC · Summer Champs.  <strong>To find:</strong> December SC · May LC · February LC standby.</p>
+
+      <div class="note"><p><strong>18 Oct</strong> — 50 back is on this day; 11th/17th only for a secondary event or relay. Seven weeks after resuming, so pull that week's Saturday gym.</p></div>
+      <div class="note"><p><strong>6–8 Nov</strong> — entries close before 18 Oct, so it's entered off banked times, not off Counties. Harvey Hadden's backstroke starts feel closer to a proper meet than Moorways SC — note this when comparing 15 m splits.</p></div>
+      <div class="note"><p><strong>Derbyshire Masters Open</strong> — if ~14 Mar it works as a sharpener into GB Champs (freshen 5 days). If 21 Mar or later, race it through untapered.</p></div>
+      <div class="note warn"><p><strong>British Masters → Budapest</strong> — only six days between the 13th and the taper start on the 19th. Front edge of the peak, not a standalone rehearsal. Last heavy squat moves to the last week of May.</p></div>
+      <div class="note warn"><p><strong>GB Champs</strong> — confirm the 50 back is on the 2027 programme. Dropped in 2024 as non-Olympic; a Worlds-trials year should restore it.</p></div>
+    </div>
+  </div>
+
+  <!-- ===== taper protocol ===== -->
+  <div class="section">
+    <div class="section-title">Taper protocol</div>
+    <div class="gm-card">
+      <div class="note"><p><strong>The taper is a gym taper.</strong> At two swim sessions a week you carry almost no swimming fatigue — nearly all accumulated load is the four gym days. Cutting swim volume from an already-minimal base costs feel for the water and buys no freshness.</p></div>
+
+      <h4>Tier 1 — Race through (no taper)</h4>
+      <p style="font-size:13px">SC Counties · Regional SC · December open · LC Regionals · February standby. Train normally; skip Saturday gym if racing Sunday. These meets are data, not performances.</p>
+
+      <h4>Tier 2 — Freshen (5–7 days)</h4>
+      <p style="font-size:13px">LC Counties (7) · Derbyshire Masters Open (5, if applicable) · May open (5) · British Masters (7).</p>
+      <ul class="plain">
+        <li>Pull deadlifts out of the week entirely.</li>
+        <li>Cut all isolation work.</li>
+        <li>Keep power cleans, jumps, bench singles.</li>
+        <li>Swim both sessions unchanged, but come out of the last set on Thursday.</li>
+      </ul>
+
+      <h4>Tier 3 — Full taper (14 days · 10-day version for GB Champs)</h4>
+      <ul class="plain">
+        <li><strong>Days 14–8:</strong> gym volume down ~40%, loads held. No deadlifts. Last squat session at the start of this window.</li>
+        <li><strong>Days 7–4:</strong> two short sessions, potentiation only — jumps, med-ball throws, 2–3 bench singles at ~80%. Nothing that grinds. No lower-body eccentrics after day 5.</li>
+        <li><strong>Days 3–0:</strong> no gym. Swim as normal minus the final set.</li>
+      </ul>
+
+      <h4>Race-week template</h4>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Day</th><th>Session</th></tr></thead>
+          <tbody>
+            <tr><td class="t-num">−7</td><td>Last moderate upper session</td></tr>
+            <tr><td class="t-num">−6</td><td>Swim (Mon) — normal, skip last set</td></tr>
+            <tr><td class="t-num">−4</td><td>Short gym: jumps + 3 fast singles</td></tr>
+            <tr><td class="t-num">−3</td><td>Swim (Thu) — starts, 15s at race speed, out early</td></tr>
+            <tr><td class="t-num">−2</td><td>Rest or 20 min loosen</td></tr>
+            <tr><td class="t-num">−1</td><td>25 min: 4 starts, 2×15 m fast, done</td></tr>
+            <tr><td class="t-num">0</td><td>Race</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn">
+        <p><strong>Do not diet into a taper.</strong> Hold intake through taper weeks even though gym expenditure drops. 400 g lighter buys nothing in a 50; feeling flat costs plenty.</p>
+        <p><strong>Recalculate pull-up loads off current bodyweight</strong> coming out of each taper block — don't resume where you left off.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== secondary events ===== -->
+  <div class="section">
+    <div class="section-title">Secondary events</div>
+    <div class="gm-card">
+      <p><strong>100 back</strong> — forces stroke mechanics to hold past the point the 50 allows brute force. If the 100 improves faster than the 50, the problem is speed; if slower, it's mechanics.</p>
+      <p><strong>50 free</strong> — start and breakout reps under race conditions. Different start, same underwater and transition problem.</p>
+      <h4>Placement</h4>
+      <ul class="plain">
+        <li>Counties &amp; Regionals: take both.</li>
+        <li>LC Counties, Masters Open, May open: one, not both, and only off the 50 back's day.</li>
+        <li>GB Champs, British Masters, Budapest: 50 back only.</li>
+      </ul>
+      <div class="note warn"><p>The 100 back is genuinely fatiguing. If it's scheduled before the 50 back on the same day, skip it or accept a slow 50. Check programmes before entering.</p></div>
+    </div>
+  </div>
+
+  <!-- ===== racing history ===== -->
+  <div class="section">
+    <div class="section-title">Racing history</div>
+    <div class="gm-card">
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Date</th><th>Time</th><th>Course</th><th>Round</th><th>Context</th></tr></thead>
+          <tbody>
+            <tr><td>31 May 25</td><td class="t-num">27.99</td><td>SC</td><td>F</td><td>Masters, Birmingham</td></tr>
+            <tr><td>26 Oct 25</td><td class="t-hi">27.81</td><td>SC</td><td>H</td><td>Masters Nationals, Sheffield</td></tr>
+            <tr><td>09 May 26</td><td class="t-num">28.22</td><td>LC</td><td>H</td><td>Level 1, Derby</td></tr>
+            <tr><td>10 May 26</td><td class="t-num">28.00</td><td>LC</td><td>H</td><td>Masters, Sandwell</td></tr>
+            <tr><td>12 Jul 26</td><td class="t-num">27.32</td><td>SC</td><td>H</td><td>Level 4, Long Eaton</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="plain">
+        <li>~0.5 s of improvement across twelve months, with no structured sprint block.</li>
+        <li>27.32 puts the SC PB of 27.2 within reach on 18 October.</li>
+        <li>9/10 May were consecutive days at different meets — the second was faster. Backing up across 24 h is not a concern for three-day meets.</li>
+        <li>Almost all swims are heats. Treat any heats-and-finals meet as a learning opportunity, not a time trial.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===== competitive context ===== -->
+  <div class="section">
+    <div class="section-title">Competitive context</div>
+    <div class="gm-card">
+      <p>25–29 is the first masters band and the hardest — populated by recently-retired club and university swimmers, closer to national senior racing than the general perception of masters swimming.</p>
+      <p><strong>26.5 should put you in the mix rather than at the sharp end.</strong> Not yet checked against Singapore 2025 results for men's 25–29 50 back.</p>
+      <p>The upside of being at the bottom of the band: the 1.5 seconds is a training problem, not an age problem. A returning 25-year-old with eleven months of structure and a specific technical target is the profile that closes that gap.</p>
+      <div class="note"><p><strong>Consequence for planning:</strong> non-masters racing is more valuable, not less. Counties, Regionals and open LC meets put you against senior swimmers at or above your level — better preparation for a 25–29 final than wide age-band fields. Keep them in even when inconvenient.</p></div>
+    </div>
+  </div>
+
+  <!-- ===== open items (synced checklist) ===== -->
+  <div class="section">
+    <div class="section-title">Open items</div>
+    <div class="gm-card">
+      <ul class="goal-list" id="openList"></ul>
+      <div class="coach-hint" style="font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);margin-top:8px" id="openHint"></div>
+    </div>
+  </div>
+
+  <footer>
+    Source document last updated 27 Aug 2026. Calendar dates for unreleased fixtures are pattern-based estimates — verify on release. This page mirrors the season source doc; edit the checklist here, edit prose in <code>swim.html</code>.
+  </footer>
+
+</div><!-- /.page -->
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Next race (from the season calendar) ----------
+  var RACES = [
+    { date: '2026-10-18', name: 'Derbyshire SC Counties', venue: 'Moorways, Derby', course: 'SC', events: '50bk (+100bk/50fr)', tier: 'Race through' },
+    { date: '2026-11-06', name: 'East Midlands Regional SC', venue: 'Harvey Hadden, Nottingham', course: 'SC', events: '50bk (+100bk/50fr)', tier: 'Race through' },
+    { date: '2026-12-10', name: 'Open SC — to find', venue: 'TBC', course: 'SC', events: '50bk +', tier: 'Race through' },
+    { date: '2027-01-30', name: 'Derbyshire LC Counties', venue: 'Moorways, Derby', course: 'LC', events: '50bk (+1)', tier: 'Freshen 7 days' },
+    { date: '2027-02-22', name: 'Open LC — standby', venue: 'TBC', course: 'LC', events: '50bk', tier: 'Race through' },
+    { date: '2027-03-18', name: 'Derbyshire Masters Open', venue: 'Moorways, Derby', course: 'LC', events: '50bk (+1)', tier: 'Date-dependent' },
+    { date: '2027-04-06', name: 'GB Championships', venue: 'London', course: 'LC', events: '50bk only', tier: '10-day taper' },
+    { date: '2027-04-28', name: 'East Midlands Regionals LC', venue: 'Moorways + Corby', course: 'LC', events: '50bk +', tier: 'Race through' },
+    { date: '2027-05-20', name: 'Open LC — to find', venue: 'TBC', course: 'LC', events: '50bk only', tier: 'Freshen 5 days' },
+    { date: '2027-06-11', name: 'British Masters', venue: 'Sunderland Aquatic Centre', course: 'LC', events: '50bk only', tier: 'Freshen 7 days' },
+    { date: '2027-07-03', name: 'World Masters — Budapest', venue: 'Budapest', course: 'LC', events: '50bk only', tier: 'Full taper', target: true },
+    { date: '2027-07-25', name: 'English Summer Champs', venue: 'TBC', course: 'LC', events: '50bk +', tier: 'Ride residual fitness' }
+  ];
+  function daysUntil(iso) {
+    var d = new Date(iso + 'T00:00:00');
+    var now = new Date(); now.setHours(0, 0, 0, 0);
+    return Math.round((d - now) / 864e5);
+  }
+  function fmt(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' });
+  }
+  (function renderRaces() {
+    var bc = document.getElementById('budapestCountdown');
+    var bd = daysUntil('2027-07-03');
+    if (bc) bc.textContent = bd > 0 ? (bd + ' days out') : 'here';
+
+    var upcoming = RACES.filter(function (r) { return daysUntil(r.date) >= 0; });
+    var next = upcoming[0];
+    if (next) {
+      var n = daysUntil(next.date);
+      document.getElementById('rnName').textContent = next.name + (next.target ? ' ★' : '');
+      document.getElementById('rnCount').textContent = n === 0 ? 'today' : n + ' days out';
+      document.getElementById('rnMeta').textContent = fmt(next.date) + ' · ' + next.course + ' · ' + next.venue + ' · ' + next.events;
+      document.getElementById('rnTier').textContent = next.tier;
+    } else {
+      document.getElementById('rnName').textContent = 'Season complete';
+      document.getElementById('rnCount').textContent = '';
+      document.getElementById('rnMeta').textContent = '';
+      document.getElementById('rnTier').textContent = '';
+    }
+    var listEl = document.getElementById('raceList');
+    listEl.innerHTML = upcoming.slice(1, 6).map(function (r) {
+      return '<li><span class="rl-date">' + fmt(r.date) + '</span>'
+        + '<span class="rl-name">' + r.name + (r.target ? ' ★' : '') + '</span>'
+        + '<span class="rl-tier">' + r.tier + '</span></li>';
+    }).join('');
+  })();
+
+  // ---------- Open items — editable, synced ----------
+  var STORE_KEY = 'swim:openitems';
+  var SEED = [
+    { g: 'Immediate', t: 'Regional SC entry deadline & QT window', s: 'Closes before 18 Oct. Enter off 28.22 LC converted — confirm conversion accepted and 09/05/26 is in window.' },
+    { g: 'Immediate', t: 'Confirm SC Counties entry is in', s: 'And its closing date.' },
+    { g: 'Immediate', t: 'Check each meet’s conversion factor', s: 'Own factor vs Swim England standard — matters if a QT sits near 27.4.' },
+    { g: 'Near term', t: 'Find December SC open', s: 'Search late Oct; entries close 4–6 weeks out.' },
+    { g: 'Near term', t: 'Third weekly swim from January', s: 'Depends on pool access.' },
+    { g: 'Near term', t: 'British Masters entry rule', s: 'Does a licensed non-masters time get accepted / appear in Masters Rankings? Lower priority — 27.81 SC banked.' },
+    { g: 'Later', t: 'Find May LC open', s: 'Search early March.' },
+    { g: 'Later', t: 'Budapest GMS registration window', s: 'Singapore ran 28 Jan–26 Jun. Check Bulletin 1 for a qualifying period on submitted times.' },
+    { g: 'Later', t: 'GB Champs 2027 conditions', s: 'Is the 50 back on the programme, and the consideration time?' },
+    { g: 'Later', t: 'Derbyshire Masters Open 2027 date', s: 'Determines sharpener vs race-through.' },
+    { g: 'Later', t: 'EM Regionals LC 2027 dates', s: '' },
+    { g: 'Later', t: 'English Summer Champs', s: 'Confirm it’s the Swim England National Summer Meet + its qualifying window.' },
+    { g: 'Later', t: 'Budapest schedule', s: 'Which day the 50 back sits on, 3–9 Jul, and whether it runs heats + finals.' }
+  ];
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw == null) { localStorage.setItem(STORE_KEY, JSON.stringify(SEED.map(function (x) { return { g: x.g, t: x.t, s: x.s, done: false }; }))); }
+      return JSON.parse(localStorage.getItem(STORE_KEY)) || [];
+    } catch (e) { return SEED.map(function (x) { return { g: x.g, t: x.t, s: x.s, done: false }; }); }
+  }
+  function save(items) { try { localStorage.setItem(STORE_KEY, JSON.stringify(items)); } catch (e) {} }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+
+  function render() {
+    var items = load();
+    var listEl = document.getElementById('openList');
+    var hintEl = document.getElementById('openHint');
+    if (!listEl) return;
+    var done = items.filter(function (i) { return i.done; }).length;
+    if (hintEl) hintEl.textContent = done + ' / ' + items.length + ' cleared';
+    var html = '', lastG = null;
+    items.forEach(function (item, i) {
+      if (item.g !== lastG) { html += '<li class="gm-group">' + esc(item.g) + '</li>'; lastG = item.g; }
+      html += '<li class="gm-row' + (item.done ? ' gm-row-done' : '') + '">'
+        + '<input type="checkbox" class="gm-check" data-i="' + i + '"' + (item.done ? ' checked' : '') + '>'
+        + '<span class="gm-text">' + esc(item.t) + (item.s ? '<small>' + esc(item.s) + '</small>' : '') + '</span>'
+        + '</li>';
+    });
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('.gm-check').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var list = load();
+        var idx = parseInt(cb.getAttribute('data-i'), 10);
+        if (list[idx]) { list[idx].done = cb.checked; save(list); render(); }
+      });
+    });
+  }
+  render();
+
+  if (window.initCloudSync) {
+    window.initCloudSync({ appKey: 'swim', syncedKeys: [STORE_KEY], onApplied: render });
+  }
+  window.addEventListener('storage', function (e) { if (e.key === STORE_KEY) render(); });
+})();
+</script>
+
+</body>
+</html>
