@@ -192,6 +192,29 @@ tbody tr:last-child td { border-bottom: 0; }
 .gm-text { flex: 1; font-size: 13px; line-height: 1.5; color: var(--text-primary); }
 .gm-text small { display: block; margin-top: 2px; color: var(--text-tertiary); font-size: 11.5px; }
 
+/* time log */
+.tl-summary { font: 500 12.5px/1.5 var(--font-mono); color: var(--text-secondary); margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.tl-summary strong { color: var(--water); }
+.tl-row { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: baseline; padding: 11px 13px; margin-bottom: 6px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
+.tl-time { font: 700 16px/1 var(--font-mono); color: var(--text-primary); }
+.tl-time.pb { color: var(--success); }
+.tl-mid { min-width: 0; }
+.tl-when { font-size: 12px; color: var(--text-secondary); }
+.tl-ctx { display: block; font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+.tl-detail { grid-column: 1 / -1; font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); margin-top: 3px; }
+.tl-del { background: none; border: 0; color: var(--text-tertiary); font-size: 16px; cursor: pointer; opacity: 0.5; padding: 0 2px; align-self: start; }
+.tl-del:hover { color: var(--danger); opacity: 1; }
+.tl-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 10px; }
+.tl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 8px; }
+.tl-form label { display: flex; flex-direction: column; gap: 4px; font: 600 9.5px/1.2 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+.tl-form input, .tl-form select {
+  padding: 9px 11px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+  background: rgba(0,0,0,0.28); color: var(--text-primary);
+  font-family: var(--font); font-size: 14px; font-weight: 400; outline: none;
+}
+.tl-form input:focus, .tl-form select:focus { border-color: rgba(255,255,255,0.28); }
+.tl-form .gm-add { align-self: flex-start; }
+
 footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-size: 11.5px; line-height: 1.6; }
 
 @media (max-width: 480px) {
@@ -438,6 +461,34 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
     </div>
   </div>
 
+  <!-- ===== time log (editable, synced) ===== -->
+  <div class="section">
+    <div class="section-title">Time log</div>
+    <div class="gm-card">
+      <div class="tl-summary" id="tlSummary"></div>
+      <ul class="goal-list" id="tlList"></ul>
+      <form class="tl-form" id="tlForm">
+        <div class="tl-grid">
+          <label>Date<input type="date" id="tlDate" required></label>
+          <label>Time (s)<input type="number" id="tlTime" step="0.01" min="15" max="60" placeholder="27.81" required></label>
+          <label>Course
+            <select id="tlCourse"><option value="LC">LC</option><option value="SC">SC</option></select>
+          </label>
+          <label>Round
+            <select id="tlRound"><option>H</option><option>SF</option><option>F</option><option>TT</option></select>
+          </label>
+        </div>
+        <label>Meet / context<input type="text" id="tlContext" placeholder="e.g. Masters Nationals, Sheffield" autocomplete="off"></label>
+        <div class="tl-grid">
+          <label>15m split<input type="number" id="tlSplit" step="0.01" placeholder="opt"></label>
+          <label>Breakout m<input type="number" id="tlBreakout" step="0.5" placeholder="opt"></label>
+          <label>Strokes<input type="number" id="tlStrokes" step="1" placeholder="opt"></label>
+        </div>
+        <button type="submit" class="gm-add">Add time</button>
+      </form>
+    </div>
+  </div>
+
   <!-- ===== competitive context ===== -->
   <div class="section">
     <div class="section-title">Competitive context</div>
@@ -571,10 +622,104 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
   }
   render();
 
-  if (window.initCloudSync) {
-    window.initCloudSync({ appKey: 'swim', syncedKeys: [STORE_KEY], onApplied: render });
+  // ---------- Time log — editable, synced ----------
+  var TL_KEY = 'swim:times';
+  var TL_SEED = [
+    { id: 's1', date: '2025-05-31', time: 27.99, course: 'SC', round: 'F', context: 'Masters, Birmingham' },
+    { id: 's2', date: '2025-10-26', time: 27.81, course: 'SC', round: 'H', context: 'Masters Nationals, Sheffield' },
+    { id: 's3', date: '2026-05-09', time: 28.22, course: 'LC', round: 'H', context: 'Level 1, Derby' },
+    { id: 's4', date: '2026-05-10', time: 28.00, course: 'LC', round: 'H', context: 'Masters, Sandwell' },
+    { id: 's5', date: '2026-07-12', time: 27.32, course: 'SC', round: 'H', context: 'Level 4, Long Eaton' }
+  ];
+  function tlLoad() {
+    try {
+      if (localStorage.getItem(TL_KEY) == null) localStorage.setItem(TL_KEY, JSON.stringify(TL_SEED));
+      var a = JSON.parse(localStorage.getItem(TL_KEY));
+      return Array.isArray(a) ? a : TL_SEED.slice();
+    } catch (e) { return TL_SEED.slice(); }
   }
-  window.addEventListener('storage', function (e) { if (e.key === STORE_KEY) render(); });
+  function tlSave(a) { try { localStorage.setItem(TL_KEY, JSON.stringify(a)); } catch (e) {} }
+  function tlFmtDate(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' });
+  }
+  function tlRender() {
+    var listEl = document.getElementById('tlList');
+    var sumEl = document.getElementById('tlSummary');
+    if (!listEl) return;
+    var items = tlLoad().slice().sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+    var bestLC = null, bestSC = null;
+    items.forEach(function (i) {
+      var t = parseFloat(i.time); if (isNaN(t)) return;
+      if (i.course === 'LC') { if (bestLC == null || t < bestLC) bestLC = t; }
+      else { if (bestSC == null || t < bestSC) bestSC = t; }
+    });
+    if (sumEl) {
+      var parts = [];
+      if (bestLC != null) parts.push('Best LC <strong>' + bestLC.toFixed(2) + '</strong> · to 26.50 target ' + (bestLC - 26.5).toFixed(2) + 's');
+      if (bestSC != null) parts.push('Best SC <strong>' + bestSC.toFixed(2) + '</strong>');
+      sumEl.innerHTML = parts.join('  ·  ') || 'No times logged yet.';
+    }
+    listEl.innerHTML = items.map(function (i) {
+      var t = parseFloat(i.time);
+      var pb = (i.course === 'LC' && t === bestLC) || (i.course === 'SC' && t === bestSC);
+      var det = [];
+      if (i.split15 != null && i.split15 !== '') det.push('15m ' + i.split15);
+      if (i.breakout != null && i.breakout !== '') det.push('breakout ' + i.breakout + 'm');
+      if (i.strokes != null && i.strokes !== '') det.push(i.strokes + ' strokes');
+      return '<li class="tl-row">'
+        + '<span class="tl-time' + (pb ? ' pb' : '') + '">' + esc(isNaN(t) ? i.time : t.toFixed(2)) + '</span>'
+        + '<span class="tl-mid"><span class="tl-when">' + tlFmtDate(i.date) + ' · ' + esc(i.course) + ' · ' + esc(i.round || 'H') + '</span>'
+        + (i.context ? '<span class="tl-ctx">' + esc(i.context) + '</span>' : '') + '</span>'
+        + '<button class="tl-del" data-id="' + esc(i.id || '') + '" aria-label="Delete">&times;</button>'
+        + (det.length ? '<span class="tl-detail">' + esc(det.join('  ·  ')) + '</span>' : '')
+        + '</li>';
+    }).join('');
+    listEl.querySelectorAll('.tl-del').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (!window.confirm('Delete this time?')) return;
+        var id = b.getAttribute('data-id');
+        var list = tlLoad().filter(function (x) { return (x.id || '') !== id; });
+        tlSave(list); tlRender();
+      });
+    });
+  }
+  var tlForm = document.getElementById('tlForm');
+  if (tlForm) {
+    tlForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var date = document.getElementById('tlDate').value;
+      var time = parseFloat(document.getElementById('tlTime').value);
+      if (!date || isNaN(time)) return;
+      var entry = {
+        id: 'r' + Date.now() + Math.random().toString(36).slice(2, 6),
+        date: date, time: time,
+        course: document.getElementById('tlCourse').value,
+        round: document.getElementById('tlRound').value,
+        context: document.getElementById('tlContext').value.trim()
+      };
+      var sp = parseFloat(document.getElementById('tlSplit').value); if (!isNaN(sp)) entry.split15 = sp;
+      var bo = parseFloat(document.getElementById('tlBreakout').value); if (!isNaN(bo)) entry.breakout = bo;
+      var st = parseInt(document.getElementById('tlStrokes').value, 10); if (!isNaN(st)) entry.strokes = st;
+      var list = tlLoad();
+      list.push(entry);
+      tlSave(list);
+      tlForm.reset();
+      tlRender();
+    });
+  }
+  tlRender();
+
+  if (window.initCloudSync) {
+    window.initCloudSync({
+      appKey: 'swim',
+      syncedKeys: [STORE_KEY, TL_KEY],
+      onApplied: function () { render(); tlRender(); }
+    });
+  }
+  window.addEventListener('storage', function (e) {
+    if (e.key === STORE_KEY) render();
+    if (e.key === TL_KEY) tlRender();
+  });
 })();
 </script>
 
