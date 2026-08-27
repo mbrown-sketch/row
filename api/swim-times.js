@@ -77,7 +77,10 @@ export default async function handler(req, res) {
   // Racing history only wants recent times — default: after 2024.
   const sinceYear = ((req.query && String(req.query.since || '')).replace(/\D/g, '')) || '2025';
   const minDate = sinceYear + '-01-01';
-  const headers = { 'User-Agent': 'Mozilla/5.0 (personal dashboard swim-times sync)' };
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+    'Accept': 'text/html',
+  };
   const openURL = 'https://www.swimmingresults.org/individualbest/personal_best.php?mode=A&tiref=' + tiref + '&back=individualbest';
   const mastersURL = 'https://www.swimmingresults.org/mastersindividualbest/personal_best.php?mode=M&tiref=' + tiref;
 
