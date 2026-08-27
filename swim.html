@@ -200,6 +200,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .tl-time.pb { color: var(--success); }
 .tl-mid { min-width: 0; }
 .tl-when { font-size: 12px; color: var(--text-secondary); }
+.tl-ev { color: var(--water); font-weight: 600; }
 .tl-ctx { display: block; font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
 .tl-detail { grid-column: 1 / -1; font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); margin-top: 3px; }
 .tl-del { background: none; border: 0; color: var(--text-tertiary); font-size: 16px; cursor: pointer; opacity: 0.5; padding: 0 2px; align-self: start; }
@@ -505,8 +506,17 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
       <ul class="goal-list" id="tlList"></ul>
       <form class="tl-form" id="tlForm">
         <div class="tl-grid">
+          <label>Event
+            <select id="tlEvent">
+              <option value="50 Back">50 Back</option>
+              <option value="100 Back">100 Back</option>
+              <option value="200 Back">200 Back</option>
+              <option value="50 Free">50 Free</option>
+              <option value="100 Free">100 Free</option>
+            </select>
+          </label>
           <label>Date<input type="date" id="tlDate" required></label>
-          <label>Time (s)<input type="number" id="tlTime" step="0.01" min="15" max="60" placeholder="27.81" required></label>
+          <label>Time (s)<input type="number" id="tlTime" step="0.01" min="15" max="600" placeholder="27.81" required></label>
           <label>Course
             <select id="tlCourse"><option value="LC">LC</option><option value="SC">SC</option></select>
           </label>
@@ -660,12 +670,14 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
 
   // ---------- Time log — editable, synced ----------
   var TL_KEY = 'swim:times';
+  var TL_EVENT = '50 Back';   // primary event — drives the summary + target gap
+  var TL_TARGET = 26.50;
   var TL_SEED = [
-    { id: 's1', date: '2025-05-31', time: 27.99, course: 'SC', round: 'F', context: 'Masters, Birmingham', category: 'masters' },
-    { id: 's2', date: '2025-10-26', time: 27.81, course: 'SC', round: 'H', context: 'Masters Nationals, Sheffield', category: 'masters' },
-    { id: 's3', date: '2026-05-09', time: 28.22, course: 'LC', round: 'H', context: 'Level 1, Derby', category: 'open' },
-    { id: 's4', date: '2026-05-10', time: 28.00, course: 'LC', round: 'H', context: 'Masters, Sandwell', category: 'masters' },
-    { id: 's5', date: '2026-07-12', time: 27.32, course: 'SC', round: 'H', context: 'Level 4, Long Eaton', category: 'open' }
+    { id: 's1', event: '50 Back', date: '2025-05-31', time: 27.99, course: 'SC', round: 'F', context: 'Masters, Birmingham', category: 'masters' },
+    { id: 's2', event: '50 Back', date: '2025-10-26', time: 27.81, course: 'SC', round: 'H', context: 'Masters Nationals, Sheffield', category: 'masters' },
+    { id: 's3', event: '50 Back', date: '2026-05-09', time: 28.22, course: 'LC', round: 'H', context: 'Level 1, Derby', category: 'open' },
+    { id: 's4', event: '50 Back', date: '2026-05-10', time: 28.00, course: 'LC', round: 'H', context: 'Masters, Sandwell', category: 'masters' },
+    { id: 's5', event: '50 Back', date: '2026-07-12', time: 27.32, course: 'SC', round: 'H', context: 'Level 4, Long Eaton', category: 'open' }
   ];
   function tlLoad() {
     try {
@@ -683,31 +695,43 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
     var sumEl = document.getElementById('tlSummary');
     if (!listEl) return;
     var items = tlLoad().slice().sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
-    var best = { LC: null, SC: null }, bestM = { LC: null, SC: null };
+
+    // Best per event+course, and per event+course among masters-eligible.
+    var best = {}, bestM = {};
     items.forEach(function (i) {
       var t = parseFloat(i.time); if (isNaN(t) || (i.course !== 'LC' && i.course !== 'SC')) return;
-      if (best[i.course] == null || t < best[i.course]) best[i.course] = t;
-      if (i.category === 'masters' && (bestM[i.course] == null || t < bestM[i.course])) bestM[i.course] = t;
+      var ev = i.event || TL_EVENT;
+      var k = ev + '|' + i.course;
+      if (best[k] == null || t < best[k]) best[k] = t;
+      if (i.category === 'masters' && (bestM[k] == null || t < bestM[k])) bestM[k] = t;
     });
+
     if (sumEl) {
-      var gapRef = bestM.LC != null ? bestM.LC : best.LC;
+      var bLC = best[TL_EVENT + '|LC'], bSC = best[TL_EVENT + '|SC'];
+      var mLC = bestM[TL_EVENT + '|LC'], mSC = bestM[TL_EVENT + '|SC'];
+      var gapRef = mLC != null ? mLC : bLC;
       var parts = [];
-      if (best.LC != null) parts.push('Best LC <strong>' + best.LC.toFixed(2) + '</strong>' + (bestM.LC != null && bestM.LC !== best.LC ? ' · masters ' + bestM.LC.toFixed(2) : ''));
-      if (best.SC != null) parts.push('Best SC <strong>' + best.SC.toFixed(2) + '</strong>' + (bestM.SC != null && bestM.SC !== best.SC ? ' · masters ' + bestM.SC.toFixed(2) : ''));
-      if (gapRef != null) parts.push('to 26.50 target ' + (gapRef - 26.5).toFixed(2) + 's');
-      sumEl.innerHTML = parts.join('  ·  ') || 'No times logged yet.';
+      if (bLC != null) parts.push(TL_EVENT + ' LC <strong>' + bLC.toFixed(2) + '</strong>' + (mLC != null && mLC !== bLC ? ' · masters ' + mLC.toFixed(2) : ''));
+      if (bSC != null) parts.push('SC <strong>' + bSC.toFixed(2) + '</strong>' + (mSC != null && mSC !== bSC ? ' · masters ' + mSC.toFixed(2) : ''));
+      if (gapRef != null) parts.push('to ' + TL_TARGET.toFixed(2) + ' target ' + (gapRef - TL_TARGET).toFixed(2) + 's');
+      // other events, compact
+      var others = Object.keys(best).filter(function (k) { return k.indexOf(TL_EVENT + '|') !== 0; })
+        .sort().map(function (k) { var p = k.split('|'); return p[0] + ' ' + p[1] + ' ' + best[k].toFixed(2); });
+      sumEl.innerHTML = (parts.join('  ·  ') || 'No times logged yet.')
+        + (others.length ? '<br><span style="color:var(--text-tertiary)">' + others.join('  ·  ') + '</span>' : '');
     }
-    var bestLC = best.LC, bestSC = best.SC;
+
     listEl.innerHTML = items.map(function (i) {
       var t = parseFloat(i.time);
-      var pb = (i.course === 'LC' && t === bestLC) || (i.course === 'SC' && t === bestSC);
+      var ev = i.event || TL_EVENT;
+      var pb = t === best[ev + '|' + i.course];
       var det = [];
       if (i.split15 != null && i.split15 !== '') det.push('15m ' + i.split15);
       if (i.breakout != null && i.breakout !== '') det.push('breakout ' + i.breakout + 'm');
       if (i.strokes != null && i.strokes !== '') det.push(i.strokes + ' strokes');
       return '<li class="tl-row">'
         + '<span class="tl-time' + (pb ? ' pb' : '') + '">' + esc(isNaN(t) ? i.time : t.toFixed(2)) + '</span>'
-        + '<span class="tl-mid"><span class="tl-when">' + tlFmtDate(i.date) + ' · ' + esc(i.course) + ' · ' + esc(i.round || 'H') + '</span>'
+        + '<span class="tl-mid"><span class="tl-when"><span class="tl-ev">' + esc(ev) + '</span> · ' + tlFmtDate(i.date) + ' · ' + esc(i.course) + ' · ' + esc(i.round || 'H') + '</span>'
         + (i.context ? '<span class="tl-ctx">' + esc(i.context) + '</span>' : '') + '</span>'
         + '<button class="tl-del" data-id="' + esc(i.id || '') + '" aria-label="Delete">&times;</button>'
         + (det.length ? '<span class="tl-detail">' + esc(det.join('  ·  ')) + '</span>' : '')
@@ -731,6 +755,7 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
       if (!date || isNaN(time)) return;
       var entry = {
         id: 'r' + Date.now() + Math.random().toString(36).slice(2, 6),
+        event: document.getElementById('tlEvent').value,
         date: date, time: time,
         course: document.getElementById('tlCourse').value,
         round: document.getElementById('tlRound').value,
@@ -754,9 +779,10 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
     var m = /^(\d+):(\d{2}\.\d{2})$/.exec(t);
     return m ? (parseInt(m[1], 10) * 60 + parseFloat(m[2])) : parseFloat(t);
   }
-  function tlHas(list, date, course, secs) {
+  function tlHas(list, event, date, course, secs) {
     return list.some(function (x) {
-      return x.date === date && x.course === course && Math.abs(parseFloat(x.time) - secs) < 0.005;
+      return (x.event || '50 Back') === event && x.date === date && x.course === course
+        && Math.abs(parseFloat(x.time) - secs) < 0.005;
     });
   }
   var pullBtn = document.getElementById('tlPullBtn');
@@ -774,7 +800,7 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
           if (!res.ok || res.j.error) { syncHint.textContent = 'Error: ' + (res.j.error || 'failed'); return; }
           var log = tlLoad();
           var novel = (res.j.times || []).filter(function (t) {
-            return t.date && !tlHas(log, t.date, t.course, tlSecs(t.time));
+            return t.date && !tlHas(log, t.event || '50 Back', t.date, t.course, tlSecs(t.time));
           });
           syncHint.textContent = 'Pulled ' + (res.j.count || 0) + ' best times' + (res.j.since ? ' (after ' + (res.j.since - 1) + ')' : '')
             + ' · ' + novel.length + ' new';
@@ -801,6 +827,7 @@ footer { max-width: 68ch; margin: 8px auto 0; color: var(--text-tertiary); font-
             picks.forEach(function (t) {
               list.push({
                 id: 'se' + Date.now() + Math.random().toString(36).slice(2, 5),
+                event: t.event || '50 Back',
                 date: t.date,
                 time: tlSecs(t.time),
                 course: t.course,
